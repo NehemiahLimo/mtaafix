@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MtaaFix AWS Architecture Diagram</title>
+    <style>
+      :root {
+        --aws-orange: #ff9900;
+        --aws-squid: #232f3e;
+        --aws-blue: #1b75bb;
+        --aws-purple: #7d3c98;
+        --aws-green: #3f8624;
+        --aws-red: #d13212;
+        --aws-cyan: #00a1c9;
+        --ink: #17231f;
+        --muted: #5d6b66;
+        --line: #9aa9a4;
+        --surface: #ffffff;
+        --page: #eef6f8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1180px;
+        background:
+          radial-gradient(circle at 15% 0%, rgba(255, 153, 0, 0.16), transparent 24%),
+          linear-gradient(180deg, #f7fbfc 0%, var(--page) 100%);
+        color: var(--ink);
+        font-family:
+          "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .page {
+        width: 1320px;
+        margin: 0 auto;
+        padding: 34px;
+      }
+
+      .title {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 34px;
+        line-height: 1;
+        letter-spacing: -0.03em;
+      }
+
+      .subtitle {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .badge {
+        border-radius: 999px;
+        background: var(--aws-squid);
+        color: white;
+        padding: 10px 15px;
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 1px solid rgba(35, 47, 62, 0.12);
+        border-radius: 18px;
+        background: #ffffff;
+        box-shadow: 0 22px 55px rgba(35, 47, 62, 0.12);
+      }
+
+      .zone {
+        fill: #fbfdfe;
+        stroke: #dbe5e2;
+        stroke-width: 1.5;
+        rx: 16;
+      }
+
+      .zone-title {
+        fill: var(--aws-squid);
+        font-size: 15px;
+        font-weight: 900;
+      }
+
+      .zone-note {
+        fill: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .actor,
+      .service {
+        fill: #ffffff;
+        stroke: #d7e1de;
+        stroke-width: 1.4;
+        rx: 12;
+        filter: drop-shadow(0 8px 16px rgba(35, 47, 62, 0.08));
+      }
+
+      .actor {
+        stroke: #b8d8c8;
+      }
+
+      .service-title {
+        fill: #111827;
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .service-subtitle {
+        fill: var(--muted);
+        font-size: 10.5px;
+        font-weight: 700;
+      }
+
+      .icon-bg {
+        rx: 8;
+      }
+
+      .icon-text {
+        fill: #ffffff;
+        font-size: 18px;
+        font-weight: 950;
+        text-anchor: middle;
+        dominant-baseline: middle;
+      }
+
+      .flow {
+        fill: none;
+        stroke: #7b8c87;
+        stroke-width: 2;
+        marker-end: url(#arrow);
+      }
+
+      .flow-dashed {
+        fill: none;
+        stroke: #9aa9a4;
+        stroke-width: 1.8;
+        stroke-dasharray: 8 7;
+        marker-end: url(#arrow-muted);
+      }
+
+      .flow-label {
+        fill: #42514c;
+        font-size: 10px;
+        font-weight: 850;
+      }
+
+      .legend {
+        fill: #f8fbfa;
+        stroke: #dbe5e2;
+        stroke-width: 1.2;
+        rx: 12;
+      }
+
+      .legend-text {
+        fill: #42514c;
+        font-size: 11px;
+        font-weight: 800;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="title">
+        <div>
+          <h1>MtaaFix AWS Solution Architecture</h1>
+          <p class="subtitle">Serverless citizen reporting, AI triage, duplicate detection, authority workflow, and notifications</p>
+        </div>
+        <div class="badge">AWS Serverless MVP</div>
+      </div>
+
+      <svg viewBox="0 0 1260 840" role="img" aria-labelledby="diagram-title diagram-desc">
+        <title id="diagram-title">MtaaFix AWS architecture diagram</title>
+        <desc id="diagram-desc">Architecture diagram showing citizens and administrators reaching a CloudFront hosted web app, API Gateway, Lambda APIs, Cognito, DynamoDB, S3, Bedrock, EventBridge, SES, SNS, CloudWatch, SSM Parameter Store, and AWS CDK.</desc>
+
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#7b8c87" />
+          </marker>
+          <marker id="arrow-muted" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,6 L9,3 z" fill="#9aa9a4" />
+          </marker>
+        </defs>
+
+        <!-- Actors -->
+        <rect class="zone" x="30" y="92" width="170" height="246" />
+        <text class="zone-title" x="52" y="124">Users</text>
+        <text class="zone-note" x="52" y="145">Public and authority access</text>
+
+        <rect class="actor" x="54" y="176" width="122" height="58" />
+        <circle cx="82" cy="205" r="16" fill="#00984f" />
+        <text class="icon-text" x="82" y="206">U</text>
+        <text class="service-title" x="106" y="199">Citizen</text>
+        <text class="service-subtitle" x="106" y="216">No account</text>
+
+        <rect class="actor" x="54" y="254" width="122" height="58" />
+        <circle cx="82" cy="283" r="16" fill="#232f3e" />
+        <text class="icon-text" x="82" y="284">A</text>
+        <text class="service-title" x="106" y="277">Admin</text>
+        <text class="service-subtitle" x="106" y="294">Authority</text>
+
+        <!-- Edge + Web -->
+        <rect class="zone" x="240" y="48" width="260" height="328" />
+        <text class="zone-title" x="264" y="80">Edge & Web</text>
+        <text class="zone-note" x="264" y="101">Global app delivery</text>
+
+        <g id="waf">
+          <rect class="service" x="278" y="126" width="184" height="64" />
+          <rect class="icon-bg" x="294" y="142" width="34" height="34" fill="#d13212" />
+          <text class="icon-text" x="311" y="160">W</text>
+          <text class="service-title" x="340" y="153">AWS WAF</text>
+          <text class="service-subtitle" x="340" y="170">Optional edge protection</text>
+        </g>
+
+        <g id="cloudfront">
+          <rect class="service" x="278" y="212" width="184" height="64" />
+          <rect class="icon-bg" x="294" y="228" width="34" height="34" fill="#7d3c98" />
+          <text class="icon-text" x="311" y="246">C</text>
+          <text class="service-title" x="340" y="239">CloudFront</text>
+          <text class="service-subtitle" x="340" y="256">HTTPS CDN</text>
+        </g>
+
+        <g id="hosting">
+          <rect class="service" x="278" y="298" width="184" height="64" />
+          <rect class="icon-bg" x="294" y="314" width="34" height="34" fill="#ff9900" />
+          <text class="icon-text" x="311" y="332">S</text>
+          <text class="service-title" x="340" y="325">S3 / Amplify</text>
+          <text class="service-subtitle" x="340" y="342">Static web app</text>
+        </g>
+
+        <!-- Auth -->
+        <rect class="zone" x="240" y="416" width="260" height="142" />
+        <text class="zone-title" x="264" y="448">Authentication</text>
+        <text class="zone-note" x="264" y="469">Protected admin portal</text>
+        <g id="cognito">
+          <rect class="service" x="278" y="486" width="184" height="58" />
+          <rect class="icon-bg" x="294" y="499" width="34" height="34" fill="#d13212" />
+          <text class="icon-text" x="311" y="517">ID</text>
+          <text class="service-title" x="340" y="511">Cognito</text>
+          <text class="service-subtitle" x="340" y="528">Admin user pool</text>
+        </g>
+
+        <!-- API -->
+        <rect class="zone" x="540" y="48" width="300" height="510" />
+        <text class="zone-title" x="564" y="80">API & Compute</text>
+        <text class="zone-note" x="564" y="101">API Gateway routes to focused Lambdas</text>
+
+        <g id="apigw">
+          <rect class="service" x="592" y="126" width="196" height="64" />
+          <rect class="icon-bg" x="608" y="142" width="34" height="34" fill="#7d3c98" />
+          <text class="icon-text" x="625" y="160">API</text>
+          <text class="service-title" x="654" y="153">API Gateway</text>
+          <text class="service-subtitle" x="654" y="170">Public and admin APIs</text>
+        </g>
+
+        <g id="public-lambda">
+          <rect class="service" x="570" y="230" width="240" height="64" />
+          <rect class="icon-bg" x="586" y="246" width="34" height="34" fill="#ff9900" />
+          <text class="icon-text" x="603" y="264">λ</text>
+          <text class="service-title" x="632" y="257">Public Lambda APIs</text>
+          <text class="service-subtitle" x="632" y="274">Report, track, map</text>
+        </g>
+
+        <g id="admin-lambda">
+          <rect class="service" x="570" y="326" width="240" height="64" />
+          <rect class="icon-bg" x="586" y="342" width="34" height="34" fill="#ff9900" />
+          <text class="icon-text" x="603" y="360">λ</text>
+          <text class="service-title" x="632" y="353">Admin Lambda APIs</text>
+          <text class="service-subtitle" x="632" y="370">Verify, assign, resolve</text>
+        </g>
+
+        <g id="upload-lambda">
+          <rect class="service" x="570" y="422" width="240" height="64" />
+          <rect class="icon-bg" x="586" y="438" width="34" height="34" fill="#ff9900" />
+          <text class="icon-text" x="603" y="456">λ</text>
+          <text class="service-title" x="632" y="449">Upload Lambda</text>
+          <text class="service-subtitle" x="632" y="466">Presigned photo URLs</text>
+        </g>
+
+        <!-- Data -->
+        <rect class="zone" x="882" y="48" width="338" height="510" />
+        <text class="zone-title" x="906" y="80">Data, AI & Events</text>
+        <text class="zone-note" x="906" y="101">Structured incidents, photos, triage, updates</text>
+
+        <g id="bedrock">
+          <rect class="service" x="914" y="126" width="128" height="74" />
+          <rect class="icon-bg" x="932" y="142" width="34" height="34" fill="#7d3c98" />
+          <text class="icon-text" x="949" y="160">AI</text>
+          <text class="service-title" x="914" y="187">Bedrock</text>
+        </g>
+
+        <g id="dynamodb">
+          <rect class="service" x="1062" y="126" width="128" height="74" />
+          <rect class="icon-bg" x="1080" y="142" width="34" height="34" fill="#1b75bb" />
+          <text class="icon-text" x="1097" y="160">DB</text>
+          <text class="service-title" x="1062" y="187">DynamoDB</text>
+        </g>
+
+        <g id="s3photos">
+          <rect class="service" x="914" y="236" width="128" height="74" />
+          <rect class="icon-bg" x="932" y="252" width="34" height="34" fill="#3f8624" />
+          <text class="icon-text" x="949" y="270">S3</text>
+          <text class="service-title" x="914" y="297">Photos</text>
+        </g>
+
+        <g id="eventbridge">
+          <rect class="service" x="1062" y="236" width="128" height="74" />
+          <rect class="icon-bg" x="1080" y="252" width="34" height="34" fill="#ff9900" />
+          <text class="icon-text" x="1097" y="270">EB</text>
+          <text class="service-title" x="1062" y="297">EventBridge</text>
+        </g>
+
+        <g id="notify">
+          <rect class="service" x="914" y="346" width="128" height="74" />
+          <rect class="icon-bg" x="932" y="362" width="34" height="34" fill="#ff9900" />
+          <text class="icon-text" x="949" y="380">λ</text>
+          <text class="service-title" x="914" y="407">Notify Lambda</text>
+        </g>
+
+        <g id="messages">
+          <rect class="service" x="1062" y="346" width="128" height="74" />
+          <rect class="icon-bg" x="1080" y="362" width="34" height="34" fill="#d13212" />
+          <text class="icon-text" x="1097" y="380">@</text>
+          <text class="service-title" x="1062" y="407">SES / SNS</text>
+        </g>
+
+        <g id="cloudwatch">
+          <rect class="service" x="914" y="456" width="128" height="74" />
+          <rect class="icon-bg" x="932" y="472" width="34" height="34" fill="#00a1c9" />
+          <text class="icon-text" x="949" y="490">CW</text>
+          <text class="service-title" x="914" y="517">CloudWatch</text>
+        </g>
+
+        <g id="ssm">
+          <rect class="service" x="1062" y="456" width="128" height="74" />
+          <rect class="icon-bg" x="1080" y="472" width="34" height="34" fill="#232f3e" />
+          <text class="icon-text" x="1097" y="490">⚙</text>
+          <text class="service-title" x="1062" y="517">SSM Params</text>
+        </g>
+
+        <!-- Infrastructure as Code -->
+        <rect class="zone" x="540" y="612" width="680" height="142" />
+        <text class="zone-title" x="564" y="644">Infrastructure & Deployment</text>
+        <text class="zone-note" x="564" y="665">Repeatable provisioning for hackathon and production environments</text>
+        <g id="cdk">
+          <rect class="service" x="582" y="686" width="206" height="52" />
+          <rect class="icon-bg" x="598" y="695" width="34" height="34" fill="#232f3e" />
+          <text class="icon-text" x="615" y="713">{}</text>
+          <text class="service-title" x="644" y="707">AWS CDK</text>
+          <text class="service-subtitle" x="644" y="724">Stacks for web, API, auth, data</text>
+        </g>
+        <rect class="legend" x="836" y="686" width="340" height="52" />
+        <text class="legend-text" x="856" y="707">Solid arrows: runtime traffic / data flow</text>
+        <text class="legend-text" x="856" y="726">Dashed arrows: provisioning and configuration</text>
+
+        <!-- Main flows -->
+        <path class="flow" d="M176 205 C214 205 230 205 278 244" />
+        <text class="flow-label" x="204" y="194">public web</text>
+        <path class="flow" d="M176 283 C214 283 230 283 278 244" />
+        <text class="flow-label" x="200" y="304">admin web</text>
+
+        <path class="flow" d="M370 126 L370 190" />
+        <path class="flow" d="M370 276 L370 298" />
+        <path class="flow" d="M462 330 C510 330 532 160 592 158" />
+        <text class="flow-label" x="482" y="235">API calls</text>
+
+        <path class="flow" d="M462 515 C518 515 530 172 592 164" />
+        <text class="flow-label" x="472" y="514">JWT auth</text>
+
+        <path class="flow" d="M690 190 L690 230" />
+        <path class="flow" d="M690 190 C734 220 734 318 690 326" />
+        <path class="flow" d="M690 190 C746 246 746 410 690 422" />
+
+        <path class="flow" d="M810 262 C856 238 870 166 914 163" />
+        <text class="flow-label" x="824" y="214">AI triage</text>
+        <path class="flow" d="M810 262 C894 258 974 190 1062 166" />
+        <text class="flow-label" x="892" y="244">reports / incidents</text>
+
+        <path class="flow" d="M810 358 C902 358 988 198 1062 170" />
+        <path class="flow" d="M810 358 C914 360 1000 274 1062 274" />
+        <text class="flow-label" x="855" y="346">status updates</text>
+
+        <path class="flow" d="M810 454 C850 454 868 284 914 274" />
+        <text class="flow-label" x="826" y="425">photo upload</text>
+
+        <path class="flow" d="M1126 310 L1126 346" />
+        <text class="flow-label" x="1136" y="331">event</text>
+        <path class="flow" d="M1042 383 L1062 383" />
+        <text class="flow-label" x="1048" y="371">send</text>
+        <path class="flow" d="M978 346 C996 284 1042 218 1062 180" />
+        <text class="flow-label" x="958" y="286">contacts</text>
+
+        <path class="flow-dashed" d="M788 712 C880 676 1000 570 978 530" />
+        <path class="flow-dashed" d="M788 712 C700 630 690 540 690 486" />
+        <path class="flow-dashed" d="M788 712 C540 660 420 532 370 544" />
+      </svg>
+    </div>
+  </body>
+</html>

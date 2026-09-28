@@ -1,0 +1,13 @@
+{
+  "name": "mtaafix",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MtaaFix hackathon MVP prototype",
+  "scripts": {
+    "dev": "python3 -m http.server 5173 --bind 127.0.0.1",
+    "build": "node --check src/main.js",
+    "preview": "python3 -m http.server 5173 --bind 127.0.0.1"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

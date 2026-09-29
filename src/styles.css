@@ -16,6 +16,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 12% 0%, rgba(0, 148, 78, 0.12), transparent 28%),
     linear-gradient(180deg, #f2f9fb 0%, #f7faf8 45%, #eef6f8 100%);
@@ -65,6 +66,7 @@ button {
   display: block;
   width: 158px;
   height: 48px;
+  max-width: 100%;
   object-fit: contain;
   object-position: left center;
 }
@@ -1425,14 +1427,164 @@ h2 {
   }
 }
 
-@media (max-width: 520px) {
-  main {
-    padding: 12px;
+@media (max-width: 680px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px;
   }
 
+  .nav-brand {
+    min-width: 0;
+  }
+
+  .nav-cta {
+    width: auto;
+    min-height: 38px;
+    padding-inline: 13px;
+    white-space: nowrap;
+  }
+
+  nav {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  nav button {
+    justify-content: center;
+    min-height: 38px;
+    min-width: 0;
+    padding: 7px 3px;
+    font-size: 0.74rem;
+  }
+
+  .hero-card {
+    min-height: auto;
+  }
+
+  .hero-card::before {
+    right: -18%;
+    bottom: 16%;
+    width: 82%;
+    opacity: 0.48;
+  }
+
+  .hero-copy {
+    padding: 28px 18px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2.55rem, 16vw, 4rem);
+  }
+
+  .hero-copy p {
+    max-width: 310px;
+    font-size: 1.05rem;
+  }
+
+  .hero-actions,
+  .home-track,
+  .home-stats,
   .track-form,
   .actions {
     grid-template-columns: 1fr;
+  }
+
+  .home-track strong {
+    padding-left: 0;
+    white-space: normal;
+  }
+
+  .home-benefits {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .category-card {
+    min-height: 118px;
+    padding: 12px 10px;
+  }
+
+  .stepper {
+    gap: 6px;
+  }
+
+  .stepper span {
+    font-size: 0.68rem;
+  }
+
+  .photo-preview {
+    min-height: 230px;
+  }
+
+  .map-filter {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .map-filter strong {
+    grid-column: 1 / -1;
+  }
+
+  .map-surface {
+    min-height: 380px;
+  }
+
+  .map-popup {
+    right: 12px;
+    bottom: 12px;
+    top: auto;
+    grid-template-columns: 76px 1fr;
+    width: calc(100% - 24px);
+  }
+
+  .tracking-card,
+  .timeline-panel,
+  .report-panel,
+  .result-panel,
+  .track-search,
+  .incident-detail,
+  .admin-sidebar,
+  .admin-detail > .panel,
+  .narrow .panel,
+  .map-layout > .panel {
+    padding: 16px;
+  }
+
+  .tracking-facts {
+    gap: 8px;
+  }
+
+  .modal-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .report-modal {
+    max-height: calc(100vh - 24px);
+  }
+
+  .footer-inner {
+    border-radius: 10px;
+  }
+}
+
+@media (max-width: 520px) {
+  main {
+    padding: 10px;
   }
 
   .topbar {
@@ -1445,16 +1597,50 @@ h2 {
     height: 42px;
   }
 
-  nav {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    width: 100%;
+  nav button {
+    font-size: 0.68rem;
   }
 
-  nav button {
-    min-width: 0;
-    padding: 8px 4px;
-    font-size: 0.72rem;
+  .nav-cta {
+    font-size: 0.76rem;
+    padding-inline: 11px;
+  }
+
+  .home-benefits,
+  .category-grid,
+  .map-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .benefit {
+    min-height: 92px;
+  }
+
+  .tracking-hero .mini-photo,
+  .mini-photo {
+    min-height: 124px;
+  }
+
+  .map-popup {
+    grid-template-columns: 1fr;
+  }
+
+  .map-popup .mini-photo {
+    display: none;
+  }
+
+  .incident-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .incident-card b {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .report-modal-media,
+  .report-modal-media .empty-photo {
+    min-height: 240px;
   }
 
   .pin span {
@@ -1463,5 +1649,23 @@ h2 {
 
   .footer-links {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 380px) {
+  .topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-cta {
+    width: 100%;
+  }
+
+  nav {
+    grid-template-columns: repeat(5, minmax(54px, 1fr));
+  }
+
+  .brand-logo {
+    width: 122px;
   }
 }

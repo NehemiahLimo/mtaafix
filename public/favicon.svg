@@ -1,6 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#14332b"/>
-  <path d="M17 40c6-12 11-18 15-18s9 6 15 18" fill="none" stroke="#f5c84b" stroke-width="6" stroke-linecap="round"/>
-  <circle cx="32" cy="22" r="7" fill="#38a169"/>
-  <path d="M22 43h20" stroke="#f7fafc" stroke-width="5" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MtaaFix">
+  <defs>
+    <linearGradient id="pin" x1="12" x2="52" y1="10" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00a05a"/>
+      <stop offset="1" stop-color="#59c42b"/>
+    </linearGradient>
+    <linearGradient id="road" x1="24" x2="43" y1="36" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#082845"/>
+      <stop offset="1" stop-color="#061a2d"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#f7faf8"/>
+  <path d="M32 5c-12.2 0-22 9.8-22 22 0 15.9 17.6 29.2 20.7 31.5.8.6 1.8.6 2.6 0C36.4 56.2 54 42.9 54 27 54 14.8 44.2 5 32 5Z" fill="url(#pin)"/>
+  <circle cx="32" cy="27" r="15.5" fill="#f7faf8"/>
+  <path d="M19 34c4.8-5.7 10.3-8.5 16.5-8.5 4.7 0 8.2 1.5 10.5 4.5l-6.6 7.5c-4.8-2.2-10.7-2.4-17.7-.7L19 34Z" fill="#13a653"/>
+  <path d="M25 39c4.9-2.2 9.7-2 14.4.5l-7.9 12.8L25 39Z" fill="url(#road)"/>
+  <path d="M29.4 41.8c2.1.3 4 .9 5.7 1.9" fill="none" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+  <path d="M28 19h4v11h-4V19Zm7-7h5v18h-5V12Zm-14 8h5v10h-5V20Z" fill="#082845"/>
+  <path d="M45.5 12.5 51 6.5M49 20l7-2M48 28l6 4" fill="none" stroke="#ffb703" stroke-width="5" stroke-linecap="round"/>
 </svg>

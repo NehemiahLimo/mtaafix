@@ -51,7 +51,26 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
 
       - name: Deploy infrastructure
-        run: npm --prefix infra run deploy -- --require-approval never
+        run: |
+          set +e
+          npm --prefix infra run deploy -- \
+            --require-approval never \
+            --outputs-file /tmp/mtaafix-cdk-outputs.json \
+            --progress errors-only > /tmp/mtaafix-cdk-deploy.log 2>&1
+          STATUS=$?
+
+          if [ "$STATUS" -ne 0 ]; then
+            echo "CDK deployment failed. Sanitized log tail:"
+            tail -n 120 /tmp/mtaafix-cdk-deploy.log \
+              | sed -E 's/[A-Za-z0-9.-]+\.cloudfront\.net/[masked-cloudfront-domain]/g' \
+              | sed -E 's/s3:\/\/[^/[:space:]]+/s3:\/\/[masked-bucket]/g' \
+              | sed -E 's/[a-z0-9-]*bucket[a-z0-9-]*/[masked-bucket]/g' \
+              | sed -E 's/[a-z]{2}-[a-z]+-[0-9]_[A-Za-z0-9]+/[masked-user-pool]/g' \
+              | sed -E 's/[a-z0-9]{20,}/[masked-id]/g'
+            exit "$STATUS"
+          fi
+
+          echo "CDK deployment completed."
 
       - name: Read stack outputs
         id: stack
@@ -68,6 +87,12 @@ jobs:
             --query "DistributionList.Items[?DomainName=='$CLOUDFRONT_DOMAIN'].Id | [0]" \
             --output text)
 
+          for SECRET_VALUE in "$WEBSITE_BUCKET" "$CLOUDFRONT_DOMAIN" "$DISTRIBUTION_ID"; do
+            if [ -n "$SECRET_VALUE" ] && [ "$SECRET_VALUE" != "None" ]; then
+              echo "::add-mask::$SECRET_VALUE"
+            fi
+          done
+
           echo "website_bucket=$WEBSITE_BUCKET" >> "$GITHUB_OUTPUT"
           echo "cloudfront_domain=$CLOUDFRONT_DOMAIN" >> "$GITHUB_OUTPUT"
           echo "distribution_id=$DISTRIBUTION_ID" >> "$GITHUB_OUTPUT"
@@ -76,22 +101,26 @@ jobs:
         run: |
           aws s3 cp index.html "s3://${{ steps.stack.outputs.website_bucket }}/index.html" \
             --content-type text/html \
-            --cache-control "no-cache, no-store, must-revalidate"
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --only-show-errors
           aws s3 sync src "s3://${{ steps.stack.outputs.website_bucket }}/src" \
             --delete \
-            --cache-control "public, max-age=60, must-revalidate"
+            --cache-control "public, max-age=60, must-revalidate" \
+            --only-show-errors
           aws s3 sync public "s3://${{ steps.stack.outputs.website_bucket }}/public" \
             --delete \
-            --cache-control "public, max-age=86400"
+            --cache-control "public, max-age=86400" \
+            --only-show-errors
           aws s3 cp public/favicon.svg "s3://${{ steps.stack.outputs.website_bucket }}/favicon.svg" \
             --content-type image/svg+xml \
-            --cache-control "public, max-age=86400"
+            --cache-control "public, max-age=86400" \
+            --only-show-errors
 
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation \
             --distribution-id "${{ steps.stack.outputs.distribution_id }}" \
-            --paths "/*"
+            --paths "/*" > /dev/null
 
       - name: Smoke test CloudFront
         run: |

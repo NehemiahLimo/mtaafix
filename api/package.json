@@ -6,7 +6,7 @@
   "description": "Low-cost MtaaFix API handlers and rule-based triage",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "check": "node --check handlers/reports.js && node --check handlers/incidents.js && node --check handlers/admin.js && node --check repositories/dynamoStore.js && node --check scripts/seed-demo.js",
+    "check": "node --check handlers/router.js && node --check handlers/reports.js && node --check handlers/incidents.js && node --check handlers/admin.js && node --check repositories/dynamoStore.js && node --check scripts/seed-demo.js",
     "seed:demo": "node scripts/seed-demo.js"
   },
   "dependencies": {

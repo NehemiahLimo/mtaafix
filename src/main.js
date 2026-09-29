@@ -502,7 +502,7 @@ function bindSuccess() {
 function trackView() {
   const selected = state.store.incidents.find((incident) => incident.id === state.selectedIncidentId) || state.store.incidents[0];
   return `
-    <section class="workspace">
+    <section class="workspace track-page">
       <div class="panel track-search">
         <div class="section-title"><span>Citizen tracking</span><strong>Track an issue</strong></div>
         <form id="track-form" class="track-form">
@@ -510,7 +510,16 @@ function trackView() {
           <button class="primary">Track</button>
         </form>
       </div>
-      ${selected ? incidentDetail(selected, false) : `<p class="empty">No incidents yet.</p>`}
+      ${
+        selected
+          ? `
+            <div class="track-content">
+              ${trackingSummary(selected)}
+              ${trackingTimeline(selected)}
+            </div>
+          `
+          : `<p class="empty">No incidents yet.</p>`
+      }
     </section>
   `;
 }
@@ -658,6 +667,77 @@ function incidentCard(incident, admin) {
   `;
 }
 
+function trackingSummary(incident) {
+  return `
+    <article class="panel tracking-card">
+      <div class="tracking-hero">
+        <div class="mini-photo"></div>
+        <div>
+          <span class="eyebrow">Incident Details</span>
+          <h1>${incident.id}</h1>
+          <p>${incident.summary}</p>
+          <div class="tracking-pills">
+            <span class="badge ${incident.status.toLowerCase()}">${titleCase(incident.status)}</span>
+            <span class="badge ${incident.priority.toLowerCase()}">${incident.priority} Priority</span>
+          </div>
+        </div>
+      </div>
+      <div class="tracking-facts">
+        ${fact("⌖", "Reports", String(incident.reportIds.length))}
+        ${fact("◷", "Reported", formatDate(incident.createdAt))}
+        ${fact("♙", "Assigned", incident.assignedTo || "Pending")}
+      </div>
+      <button class="light-button track-map-button" data-view="map">View on Map</button>
+    </article>
+  `;
+}
+
+function trackingTimeline(incident) {
+  return `
+    <aside class="panel timeline-panel">
+      <div class="section-title"><span>Progress</span><strong>Incident Timeline</strong></div>
+      <ol class="status-timeline">
+        ${statusOrder.map((status) => timelineStep(incident, status)).join("")}
+      </ol>
+    </aside>
+  `;
+}
+
+function timelineStep(incident, status) {
+  const event = incident.events.find((item) => normalizeStatus(item.label) === status) || statusFallback(incident, status);
+  const currentIndex = statusOrder.indexOf(incident.status);
+  const itemIndex = statusOrder.indexOf(status);
+  const isDone = itemIndex <= currentIndex;
+  const isCurrent = itemIndex === currentIndex;
+  return `
+    <li class="${isDone ? "done" : ""} ${isCurrent ? "current" : ""}">
+      <span class="timeline-node">${isDone ? "✓" : ""}</span>
+      <div>
+        <strong>${titleCase(status)}</strong>
+        <small>${event?.at ? formatDate(event.at) : "Will be updated once reached."}</small>
+        <p>${event?.detail || statusCopy(status)}</p>
+      </div>
+    </li>
+  `;
+}
+
+function statusFallback(incident, status) {
+  if (status === "REPORTED") {
+    return incident.events[0] || { detail: "Your report has been received.", at: incident.createdAt };
+  }
+  return null;
+}
+
+function fact(icon, label, value) {
+  return `
+    <div class="tracking-fact">
+      <b>${icon}</b>
+      <span>${value}</span>
+      <small>${label}</small>
+    </div>
+  `;
+}
+
 function incidentDetail(incident, admin) {
   const reports = state.store.reports.filter((report) => report.incidentId === incident.id);
   return `
@@ -761,4 +841,19 @@ function capitalize(value) {
 
 function titleCase(value) {
   return value.toLowerCase().split("_").map(capitalize).join(" ");
+}
+
+function normalizeStatus(value) {
+  const normalized = String(value || "").toUpperCase().replace(/\s+/g, "_");
+  return normalized === "IN_PROGRESS" ? "IN_PROGRESS" : normalized;
+}
+
+function statusCopy(status) {
+  return {
+    REPORTED: "Your report has been received.",
+    VERIFIED: "The issue has been verified by the team.",
+    ASSIGNED: "Assigned to the responsible team.",
+    IN_PROGRESS: "Work is currently underway.",
+    RESOLVED: "Will be updated once resolved.",
+  }[status] || "Status update pending.";
 }

@@ -592,6 +592,90 @@ select:focus {
   gap: 10px;
 }
 
+.track-page {
+  gap: 18px;
+}
+
+.track-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.tracking-card,
+.timeline-panel {
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.tracking-hero {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.tracking-hero .mini-photo {
+  min-height: 150px;
+}
+
+.tracking-hero h1 {
+  margin-top: 6px;
+  font-size: clamp(1.55rem, 3.6vw, 2.45rem);
+}
+
+.tracking-hero p {
+  color: #53615b;
+  line-height: 1.6;
+}
+
+.tracking-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tracking-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0;
+}
+
+.tracking-fact {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  align-items: center;
+  border-radius: 8px;
+  background: #f4f8f5;
+  padding: 13px;
+}
+
+.tracking-fact b {
+  grid-row: span 2;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  background: #e7f8ee;
+  color: #008848;
+}
+
+.tracking-fact span {
+  font-weight: 900;
+}
+
+.tracking-fact small {
+  color: #66736e;
+  font-weight: 750;
+}
+
+.track-map-button {
+  width: min(220px, 100%);
+}
+
 .detail-head {
   display: flex;
   justify-content: space-between;
@@ -631,6 +715,23 @@ h2 {
 
 .badge.low {
   background: #cdebd8;
+}
+
+.badge.reported {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.badge.verified,
+.badge.assigned,
+.badge.in_progress {
+  background: #fff3c4;
+  color: #a15c00;
+}
+
+.badge.resolved {
+  background: #cdebd8;
+  color: #087d45;
 }
 
 .progress {
@@ -683,6 +784,83 @@ h2 {
 .timeline small,
 .reports small {
   color: #66736e;
+}
+
+.status-timeline {
+  position: relative;
+  display: grid;
+  gap: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.status-timeline::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  bottom: 34px;
+  left: 16px;
+  width: 3px;
+  border-radius: 999px;
+  background: #d7e1de;
+}
+
+.status-timeline li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 35px 1fr;
+  gap: 15px;
+  min-height: 92px;
+  padding-bottom: 18px;
+}
+
+.timeline-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 35px;
+  height: 35px;
+  place-items: center;
+  border: 3px solid #d7e1de;
+  border-radius: 999px;
+  background: #eef3f1;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 950;
+}
+
+.status-timeline li.done .timeline-node {
+  border-color: #00984f;
+  background: #00984f;
+}
+
+.status-timeline li.current .timeline-node {
+  border-color: #1d73e8;
+  background: #1d73e8;
+  box-shadow: 0 0 0 6px rgba(29, 115, 232, 0.12);
+}
+
+.status-timeline strong,
+.status-timeline small,
+.status-timeline p {
+  display: block;
+}
+
+.status-timeline strong {
+  font-size: 1rem;
+}
+
+.status-timeline small {
+  margin: 2px 0 6px;
+  color: #66736e;
+  font-weight: 750;
+}
+
+.status-timeline p {
+  margin: 0;
+  color: #53615b;
+  line-height: 1.45;
 }
 
 .map-surface {
@@ -1042,6 +1220,7 @@ h2 {
   .map-layout,
   .admin-shell,
   .about-grid,
+  .track-content,
   .two,
   .triage-grid,
   .stat-row,
@@ -1054,6 +1233,11 @@ h2 {
   }
 
   .progress {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-hero,
+  .tracking-facts {
     grid-template-columns: 1fr;
   }
 

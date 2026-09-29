@@ -30,6 +30,12 @@ let state = {
   selectedPhotoPreviewUrl: "",
   adminReportsByIncident: {},
   adminLoadingIncidentId: "",
+  adminFilters: {
+    status: "ALL",
+    priority: "ALL",
+    category: "ALL",
+  },
+  selectedAdminReportId: "",
   adminToken: sessionStorage.getItem("mtaafix.admin.token") || "",
 };
 
@@ -294,6 +300,20 @@ async function withAdminPhotoUrl(report) {
   } catch (error) {
     return report;
   }
+}
+
+function filteredAdminIncidents() {
+  return state.store.incidents.filter((incident) => {
+    if (state.adminFilters.status !== "ALL" && incident.status !== state.adminFilters.status) return false;
+    if (state.adminFilters.priority !== "ALL" && incident.priority !== state.adminFilters.priority) return false;
+    if (state.adminFilters.category !== "ALL" && incident.category !== state.adminFilters.category) return false;
+    return true;
+  });
+}
+
+function selectedAdminReport() {
+  const reports = state.adminReportsByIncident[state.selectedIncidentId] || [];
+  return reports.find((report) => (report.reportId || report.id) === state.selectedAdminReportId) || null;
 }
 
 function makeEvent(label, detail, at = new Date().toISOString()) {
@@ -927,23 +947,89 @@ function adminView() {
     `;
   }
 
-  const selected = state.store.incidents.find((incident) => incident.id === state.selectedIncidentId) || state.store.incidents[0];
+  const incidents = filteredAdminIncidents();
+  const selected = state.store.incidents.find((incident) => incident.id === state.selectedIncidentId) || incidents[0] || state.store.incidents[0];
+  const activeReport = selectedAdminReport();
   return `
     <section class="admin-shell">
       <aside class="panel admin-sidebar">
-        <div class="section-title"><span>Queue</span><strong>${state.store.incidents.length} incidents</strong></div>
+        <div class="admin-topline">
+          <div class="section-title"><span>Queue</span><strong>${incidents.length} incidents</strong></div>
+          <button class="light-button admin-logout" id="admin-logout" type="button">Sign out</button>
+        </div>
         <div class="stat-row">
           ${metric("Open", String(state.store.incidents.filter((i) => i.status !== "RESOLVED").length))}
           ${metric("High", String(state.store.incidents.filter((i) => i.priority === "HIGH").length))}
         </div>
-        <div class="incident-list">${state.store.incidents.map((incident) => incidentCard(incident, true)).join("")}</div>
+        ${adminFiltersView()}
+        <div class="incident-list">${incidents.length ? incidents.map((incident) => incidentCard(incident, true)).join("") : `<p class="empty">No incidents match these filters.</p>`}</div>
       </aside>
       <section class="admin-detail">${selected ? incidentDetail(selected, true) : `<p class="empty">Select an incident.</p>`}</section>
     </section>
+    ${activeReport ? reportModal(activeReport) : ""}
+  `;
+}
+
+function adminFiltersView() {
+  const categoryOptions = [["ALL", "All categories"], ...reportCategories.map(([value, label]) => [value, label])];
+  return `
+    <form id="admin-filters" class="admin-filters">
+      <label>Status
+        <select name="status">
+          ${["ALL", ...statusOrder].map((status) => `<option value="${status}" ${state.adminFilters.status === status ? "selected" : ""}>${status === "ALL" ? "All statuses" : titleCase(status)}</option>`).join("")}
+        </select>
+      </label>
+      <label>Priority
+        <select name="priority">
+          ${["ALL", "HIGH", "MEDIUM", "LOW"].map((priority) => `<option value="${priority}" ${state.adminFilters.priority === priority ? "selected" : ""}>${priority === "ALL" ? "All priorities" : titleCase(priority)}</option>`).join("")}
+        </select>
+      </label>
+      <label>Category
+        <select name="category">
+          ${categoryOptions.map(([value, label]) => `<option value="${value}" ${state.adminFilters.category === value ? "selected" : ""}>${label}</option>`).join("")}
+        </select>
+      </label>
+    </form>
   `;
 }
 
 function bindAdmin() {
+  app.querySelector("#admin-logout")?.addEventListener("click", () => {
+    sessionStorage.removeItem("mtaafix.admin.token");
+    state.adminToken = "";
+    state.adminAuthed = false;
+    state.adminReportsByIncident = {};
+    state.selectedAdminReportId = "";
+    render();
+  });
+
+  app.querySelector("#admin-filters")?.addEventListener("change", (event) => {
+    const formData = new FormData(event.currentTarget);
+    state.adminFilters = {
+      status: String(formData.get("status") || "ALL"),
+      priority: String(formData.get("priority") || "ALL"),
+      category: String(formData.get("category") || "ALL"),
+    };
+    const incidents = filteredAdminIncidents();
+    if (!incidents.some((incident) => incident.id === state.selectedIncidentId)) {
+      state.selectedIncidentId = incidents[0]?.id || "";
+    }
+    state.selectedAdminReportId = "";
+    render();
+  });
+
+  app.querySelectorAll("[data-open-report]").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.selectedAdminReportId = el.dataset.openReport || "";
+      render();
+    });
+  });
+
+  app.querySelector("[data-close-report]")?.addEventListener("click", () => {
+    state.selectedAdminReportId = "";
+    render();
+  });
+
   app.querySelector("#admin-login")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -968,6 +1054,7 @@ function bindAdmin() {
   app.querySelectorAll("[data-select-incident]").forEach((el) => {
     el.addEventListener("click", async () => {
       state.selectedIncidentId = el.dataset.selectIncident || "";
+      state.selectedAdminReportId = "";
       render();
       try {
         await loadAdminIncidentDetails(state.selectedIncidentId);
@@ -986,6 +1073,7 @@ function bindAdmin() {
     const status = String(formData.get("status"));
     const priority = String(formData.get("priority"));
     const assignedTo = String(formData.get("assignedTo") || "").trim();
+    const publicUpdate = String(formData.get("publicUpdate") || "").trim();
     const resolution = String(formData.get("resolution") || "").trim();
     const changedAt = new Date().toISOString();
 
@@ -998,11 +1086,12 @@ function bindAdmin() {
             priority,
             assignedTo: assignedTo || null,
             resolution: resolution || null,
-            publicUpdate: resolution || `Status changed from ${incident.status} to ${status}.`,
+            publicUpdate: publicUpdate || resolution || `Status changed from ${incident.status} to ${status}.`,
             publicVisible: true,
           }),
         });
         upsertIncident(apiIncidentToLocal(payload.incident));
+        await loadAdminIncidentDetails(incident.id);
         render();
         return;
       } catch (error) {
@@ -1011,6 +1100,7 @@ function bindAdmin() {
     }
 
     if (status !== incident.status) incident.events.push(makeEvent(titleCase(status), `Status changed from ${incident.status} to ${status}.`, changedAt));
+    if (publicUpdate) incident.events.push(makeEvent(titleCase(status), publicUpdate, changedAt));
     if (resolution && resolution !== incident.resolution) incident.events.push(makeEvent("Resolution update", resolution, changedAt));
 
     incident.status = status;
@@ -1142,6 +1232,7 @@ function incidentDetail(incident, admin) {
               <label>Status<select name="status">${statusOrder.map((status) => `<option ${status === incident.status ? "selected" : ""}>${status}</option>`).join("")}</select></label>
               <label>Priority<select name="priority">${["LOW", "MEDIUM", "HIGH"].map((priority) => `<option ${priority === incident.priority ? "selected" : ""}>${priority}</option>`).join("")}</select></label>
               <label>Assigned team<input name="assignedTo" value="${incident.assignedTo || ""}" placeholder="Road maintenance team" /></label>
+              <label>Progress note<textarea name="publicUpdate" rows="3" placeholder="Short update visible on the public timeline."></textarea></label>
               <label>Resolution information<textarea name="resolution" rows="3" placeholder="Repair completed, area reopened.">${incident.resolution || ""}</textarea></label>
               <button class="primary">Update incident</button>
             </form>
@@ -1180,8 +1271,36 @@ function adminReportCard(report) {
           <span>${escapeHtml(contact)}</span>
           ${report.photoKey ? `<span>Photo attached</span>` : `<span>No photo attached</span>`}
         </div>
+        <button class="light-button report-open" type="button" data-open-report="${escapeHtml(reportId)}">View report</button>
       </div>
     </article>
+  `;
+}
+
+function reportModal(report) {
+  const reportId = report.reportId || report.id || "Report";
+  const location = typeof report.location === "string" ? report.location : report.location?.label || "Location not provided";
+  const contact = report.contactEmail || report.contactPhone || report.contact || "No contact provided";
+  return `
+    <div class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Report details">
+      <article class="panel report-modal">
+        <button class="modal-close" type="button" data-close-report aria-label="Close report details">×</button>
+        <div class="report-modal-media">
+          ${report.photoUrl ? `<img src="${report.photoUrl}" alt="Attached issue photo for ${escapeHtml(reportId)}" />` : `<div class="empty-photo">No photo attached</div>`}
+        </div>
+        <div class="report-modal-body">
+          <span class="eyebrow">Citizen report</span>
+          <h2>${escapeHtml(reportId)}</h2>
+          <p>${escapeHtml(report.description || "No description provided.")}</p>
+          <div class="stat-row">
+            ${metric("Submitted", formatDate(report.createdAt))}
+            ${metric("Contact", escapeHtml(contact))}
+            ${metric("Location", escapeHtml(location))}
+            ${metric("Attachment", report.photoKey ? "Photo attached" : "No photo")}
+          </div>
+        </div>
+      </article>
+    </div>
   `;
 }
 

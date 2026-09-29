@@ -306,6 +306,30 @@ main {
   grid-template-columns: 370px minmax(0, 1fr);
 }
 
+.admin-topline {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-logout {
+  min-height: 38px;
+  padding-inline: 14px;
+  white-space: nowrap;
+}
+
+.admin-filters {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.admin-filters label {
+  gap: 5px;
+  font-size: 0.84rem;
+}
+
 .narrow {
   width: min(560px, 100%);
 }
@@ -865,6 +889,76 @@ h2 {
   line-height: 1.5;
 }
 
+.report-open {
+  justify-self: start;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 18, 15, 0.55);
+}
+
+.report-modal {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.1fr);
+  gap: 20px;
+  width: min(960px, 100%);
+  max-height: min(780px, calc(100vh - 48px));
+  overflow: auto;
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: #17231f;
+  color: white;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.report-modal-media {
+  display: grid;
+  min-height: 320px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #dfe7e3;
+}
+
+.report-modal-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.report-modal-media .empty-photo {
+  min-height: 320px;
+}
+
+.report-modal-body {
+  padding-right: 28px;
+}
+
+.report-modal-body h2 {
+  margin-top: 4px;
+  font-size: clamp(1.65rem, 3vw, 2.5rem);
+}
+
 .status-timeline {
   position: relative;
   display: grid;
@@ -1316,8 +1410,14 @@ h2 {
   }
 
   .tracking-hero,
-  .tracking-facts {
+  .tracking-facts,
+  .report-card,
+  .report-modal {
     grid-template-columns: 1fr;
+  }
+
+  .report-modal-body {
+    padding-right: 0;
   }
 
   .footer-inner {

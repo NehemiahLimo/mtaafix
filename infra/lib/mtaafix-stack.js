@@ -129,6 +129,7 @@ class MtaaFixStack extends cdk.Stack {
     const getAdminIncident = this.apiFunction("GetAdminIncidentFn", "handlers/admin.getAdminIncidentHandler", env);
     const updateAdminIncident = this.apiFunction("UpdateAdminIncidentFn", "handlers/admin.updateAdminIncidentHandler", env);
     const listAdminReports = this.apiFunction("ListAdminReportsFn", "handlers/admin.listAdminReportsHandler", env);
+    const getAdminPhotoUrl = this.apiFunction("GetAdminPhotoUrlFn", "handlers/admin.getAdminPhotoUrlHandler", env);
 
     for (const fn of [
       analyzeReports,
@@ -139,12 +140,14 @@ class MtaaFixStack extends cdk.Stack {
       getAdminIncident,
       updateAdminIncident,
       listAdminReports,
+      getAdminPhotoUrl,
     ]) {
       incidentsTable.grantReadWriteData(fn);
       reportsTable.grantReadWriteData(fn);
       eventsTable.grantReadWriteData(fn);
     }
     photosBucket.grantPut(presignUpload);
+    photosBucket.grantRead(getAdminPhotoUrl);
 
     addRoute(api, "POST", "/v1/reports/analyze", analyzeReports);
     addRoute(api, "POST", "/v1/reports", createReport);
@@ -157,6 +160,7 @@ class MtaaFixStack extends cdk.Stack {
     addRoute(api, "GET", "/v1/admin/incidents/{incidentId}", getAdminIncident, adminAuthorizer);
     addRoute(api, "PATCH", "/v1/admin/incidents/{incidentId}", updateAdminIncident, adminAuthorizer);
     addRoute(api, "GET", "/v1/admin/incidents/{incidentId}/reports", listAdminReports, adminAuthorizer);
+    addRoute(api, "GET", "/v1/admin/photos", getAdminPhotoUrl, adminAuthorizer);
 
     const websiteOriginAccessIdentity = new cloudfront.OriginAccessIdentity(this, "WebsiteOriginAccessIdentity");
     websiteBucket.grantRead(websiteOriginAccessIdentity);

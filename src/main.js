@@ -26,6 +26,10 @@ let state = {
   apiOnline: false,
   isBusy: false,
   uploadStatus: "",
+  selectedPhotoName: "",
+  selectedPhotoPreviewUrl: "",
+  adminReportsByIncident: {},
+  adminLoadingIncidentId: "",
   adminToken: sessionStorage.getItem("mtaafix.admin.token") || "",
 };
 
@@ -269,8 +273,46 @@ async function refreshAdminIncidents() {
   saveStore();
 }
 
+async function loadAdminIncidentDetails(incidentId) {
+  if (!state.adminToken || !incidentId) return;
+  state.adminLoadingIncidentId = incidentId;
+  try {
+    const payload = await adminFetch(`/v1/admin/incidents/${encodeURIComponent(incidentId)}`);
+    const incident = apiIncidentToLocal(payload.incident, payload.timeline || []);
+    upsertIncident(incident);
+    state.adminReportsByIncident[incidentId] = await Promise.all((payload.reports || []).map(withAdminPhotoUrl));
+  } finally {
+    state.adminLoadingIncidentId = "";
+  }
+}
+
+async function withAdminPhotoUrl(report) {
+  if (!report.photoKey) return report;
+  try {
+    const payload = await adminFetch(`/v1/admin/photos?key=${encodeURIComponent(report.photoKey)}`);
+    return { ...report, photoUrl: payload.viewUrl };
+  } catch (error) {
+    return report;
+  }
+}
+
 function makeEvent(label, detail, at = new Date().toISOString()) {
   return { id: crypto.randomUUID(), label, detail, at };
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function setSelectedPhoto(file) {
+  if (state.selectedPhotoPreviewUrl) URL.revokeObjectURL(state.selectedPhotoPreviewUrl);
+  state.selectedPhotoName = file?.name || "";
+  state.selectedPhotoPreviewUrl = file?.name ? URL.createObjectURL(file) : "";
 }
 
 function render() {
@@ -331,7 +373,7 @@ function footerView() {
         </div>
         <div class="footer-status">
           <span>${open} open incidents</span>
-          <span>Serverless AWS-ready MVP</span>
+          <span>Community issue tracking</span>
         </div>
       </div>
     </footer>
@@ -409,7 +451,7 @@ function aboutView() {
         <div class="stat-row">
           ${metric("Rules triage", "Classification, priority, duplicates")}
           ${metric("Privacy", "Public-safe incident views")}
-          ${metric("AWS path", "Serverless MVP")}
+          ${metric("Reliable updates", "Track progress as teams respond")}
           ${metric("Workflow", "Reported to resolved")}
         </div>
       </div>
@@ -425,7 +467,8 @@ function aboutView() {
 function reportView() {
   const duplicate = state.lastDuplicate;
   const triage = state.lastTriage;
-  const pendingPhotoName = state.pendingReport?.photoName;
+  const pendingPhotoName = state.pendingReport?.photoName || state.selectedPhotoName;
+  const previewUrl = state.selectedPhotoPreviewUrl;
 
   return `
     <section class="workspace report-layout">
@@ -447,8 +490,9 @@ function reportView() {
         </div>
         <form id="report-form" class="stack">
           <div class="photo-uploader">
-            <div class="photo-preview">
-              <span>${pendingPhotoName || "Road surface photo"}</span>
+            <div class="photo-preview ${previewUrl ? "has-image" : ""}">
+              ${previewUrl ? `<img src="${previewUrl}" alt="Selected issue photo preview" />` : ""}
+              <span>${escapeHtml(pendingPhotoName || "Add a clear issue photo")}</span>
             </div>
             <label class="file-button">Take or choose photo<input name="photo" type="file" accept="image/*" /></label>
             <small>Supported: JPG, PNG, WEBP. Max 5 MB.</small>
@@ -472,7 +516,7 @@ function reportView() {
           triage
             ? `
               <div class="ai-banner">✣ We've checked category, priority, and possible duplicates</div>
-              ${pendingPhotoName ? `<p class="upload-note">Photo ready: <strong>${pendingPhotoName}</strong></p>` : ""}
+              ${pendingPhotoName ? `<p class="upload-note">Photo ready: <strong>${escapeHtml(pendingPhotoName)}</strong></p>` : ""}
               ${state.uploadStatus ? `<p class="upload-note">${state.uploadStatus}</p>` : ""}
               <div class="triage-grid">
                 ${metric("Category", triage.category)}
@@ -529,6 +573,18 @@ function bindReport() {
   });
 
   const form = app.querySelector("#report-form");
+  form?.querySelector('input[name="photo"]')?.addEventListener("change", (event) => {
+    const file = event.currentTarget.files?.[0];
+    setSelectedPhoto(file);
+    const preview = form.querySelector(".photo-preview");
+    if (!preview) return;
+    preview.classList.toggle("has-image", Boolean(state.selectedPhotoPreviewUrl));
+    preview.innerHTML = `
+      ${state.selectedPhotoPreviewUrl ? `<img src="${state.selectedPhotoPreviewUrl}" alt="Selected issue photo preview" />` : ""}
+      <span>${escapeHtml(state.selectedPhotoName || "Add a clear issue photo")}</span>
+    `;
+  });
+
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(form);
@@ -538,6 +594,7 @@ function bindReport() {
     const lat = Number(formData.get("lat") || -1.2862);
     const lng = Number(formData.get("lng") || 36.8222);
     const file = formData.get("photo");
+    if (file?.name) setSelectedPhoto(file);
 
     state.pendingReport = {
       description,
@@ -860,10 +917,10 @@ function adminView() {
         <div class="panel">
           <div class="section-title"><span>Administrator</span><strong>Sign in to manage incidents</strong></div>
           <form id="admin-login" class="stack">
-            <label>Email<input name="email" type="email" placeholder="admin@example.com" /></label>
-            <label>Password<input name="password" type="password" placeholder="Cognito password" /></label>
+            <label>Email<input name="email" type="email" autocomplete="username" /></label>
+            <label>Password<input name="password" type="password" autocomplete="current-password" /></label>
             <button class="primary">Sign in</button>
-            <p class="empty">Protected by the deployed Cognito user pool. Create an admin user in AWS before signing in.</p>
+            <p class="empty">Authorized staff can review, assign, and update community reports.</p>
           </form>
         </div>
       </section>
@@ -892,11 +949,16 @@ function bindAdmin() {
     const formData = new FormData(event.currentTarget);
     try {
       const token = await cognitoSignIn(String(formData.get("email") || ""), String(formData.get("password") || ""));
-      if (!token) throw new Error("Cognito did not return an ID token.");
+      if (!token) throw new Error("Sign-in was not completed. Please try again.");
       state.adminToken = token;
       sessionStorage.setItem("mtaafix.admin.token", token);
       state.adminAuthed = true;
       await refreshAdminIncidents();
+      try {
+        await loadAdminIncidentDetails(state.selectedIncidentId);
+      } catch (error) {
+        console.warn(error);
+      }
       render();
     } catch (error) {
       alert(error.message);
@@ -904,8 +966,14 @@ function bindAdmin() {
   });
 
   app.querySelectorAll("[data-select-incident]").forEach((el) => {
-    el.addEventListener("click", () => {
+    el.addEventListener("click", async () => {
       state.selectedIncidentId = el.dataset.selectIncident || "";
+      render();
+      try {
+        await loadAdminIncidentDetails(state.selectedIncidentId);
+      } catch (error) {
+        alert("Unable to load report details right now.");
+      }
       render();
     });
   });
@@ -1037,7 +1105,10 @@ function fact(icon, label, value) {
 }
 
 function incidentDetail(incident, admin) {
-  const reports = state.store.reports.filter((report) => report.incidentId === incident.id);
+  const reports = admin
+    ? state.adminReportsByIncident[incident.id] || state.store.reports.filter((report) => report.incidentId === incident.id)
+    : state.store.reports.filter((report) => report.incidentId === incident.id);
+  const loadingReports = state.adminLoadingIncidentId === incident.id;
   return `
     <article class="panel incident-detail">
       <div class="detail-head">
@@ -1077,20 +1148,39 @@ function incidentDetail(incident, admin) {
             <h2>Citizen reports</h2>
             <div class="reports">
               ${
-                reports.length
-                  ? reports.map((report) => `
-                    <div>
-                      <strong>${report.id}</strong>
-                      <span>${report.description}</span>
-                      <small>${report.location} · ${formatDate(report.createdAt)} · ${report.contact || "no contact"}</small>
-                    </div>
-                  `).join("")
-                  : `<p class="empty">Seeded reports are counted but only new demo submissions show full citizen details.</p>`
+                loadingReports
+                  ? `<p class="empty">Loading report details...</p>`
+                  : reports.length
+                    ? reports.map(adminReportCard).join("")
+                    : `<p class="empty">No detailed citizen reports are available yet.</p>`
               }
             </div>
           `
           : ""
       }
+    </article>
+  `;
+}
+
+function adminReportCard(report) {
+  const reportId = report.reportId || report.id || "Report";
+  const location = typeof report.location === "string" ? report.location : report.location?.label || "Location not provided";
+  const contact = report.contactEmail || report.contactPhone || report.contact || "No contact provided";
+  return `
+    <article class="report-card">
+      ${report.photoUrl ? `<img class="report-photo" src="${report.photoUrl}" alt="Attached issue photo for ${escapeHtml(reportId)}" />` : `<div class="report-photo empty-photo">No photo</div>`}
+      <div class="report-copy">
+        <div class="report-head">
+          <strong>${escapeHtml(reportId)}</strong>
+          <span>${formatDate(report.createdAt)}</span>
+        </div>
+        <p>${escapeHtml(report.description || "No description provided.")}</p>
+        <div class="report-meta">
+          <span>${escapeHtml(location)}</span>
+          <span>${escapeHtml(contact)}</span>
+          ${report.photoKey ? `<span>Photo attached</span>` : `<span>No photo attached</span>`}
+        </div>
+      </div>
     </article>
   `;
 }
@@ -1130,7 +1220,9 @@ function toRad(value) {
 }
 
 function formatDate(value) {
-  return new Intl.DateTimeFormat("en-KE", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date not available";
+  return new Intl.DateTimeFormat("en-KE", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
 function capitalize(value) {

@@ -64,3 +64,29 @@ export async function listAdminReportsHandler(event) {
     return handleError(error, event?.requestContext?.requestId);
   }
 }
+
+export async function getAdminPhotoUrlHandler(event) {
+  try {
+    const key = String(event?.queryStringParameters?.key || "");
+    if (!key.startsWith("uploads/") || key.includes("..")) {
+      throw httpError(400, "VALIDATION_ERROR", "Invalid photo key.");
+    }
+    if (!process.env.PHOTOS_BUCKET) {
+      throw httpError(404, "NOT_FOUND", "Photo storage is not configured.");
+    }
+
+    const { GetObjectCommand, S3Client } = await import("@aws-sdk/client-s3");
+    const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+    const command = new GetObjectCommand({
+      Bucket: process.env.PHOTOS_BUCKET,
+      Key: key,
+    });
+
+    return json(200, {
+      viewUrl: await getSignedUrl(new S3Client({}), command, { expiresIn: 900 }),
+      expiresInSeconds: 900,
+    });
+  } catch (error) {
+    return handleError(error, event?.requestContext?.requestId);
+  }
+}

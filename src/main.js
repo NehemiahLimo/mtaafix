@@ -368,6 +368,7 @@ function render() {
   if (state.view === "admin") bindAdmin();
   if (state.view === "home") bindHome();
   if (state.view === "success") bindSuccess();
+  if (state.view === "map") initLeafletMap();
 }
 
 function navButton(view, label) {
@@ -879,7 +880,6 @@ function bindTrack() {
 
 function mapView() {
   const incidents = state.store.incidents;
-  const highlighted = incidents[0];
   return `
     <section class="workspace map-layout">
       <aside class="panel map-filter">
@@ -899,27 +899,12 @@ function mapView() {
         <label><input type="checkbox" checked /> Medium</label>
         <label><input type="checkbox" /> Low</label>
       </aside>
-      <div class="map-surface panel" aria-label="Public community map">
-        ${incidents.map((incident, index) => `
-          <button class="pin ${incident.priority.toLowerCase()} ${incident.status === "RESOLVED" ? "resolved" : ""}"
-            style="--x:${18 + ((index * 27) % 68)}%;--y:${22 + ((index * 19) % 58)}%"
-            data-incident="${incident.id}">
-            <span>${incident.id}</span>
-          </button>
-        `).join("")}
-        <div class="map-popup">
-          <div class="mini-photo"></div>
-          <div>
-            <strong>${highlighted.id}</strong>
-            <span>${titleCase(highlighted.category)}</span>
-            <small>${highlighted.location}</small>
-            <div class="inline-metrics">
-              <b>${titleCase(highlighted.status)}</b>
-              <b>${highlighted.reportIds.length} reports</b>
-              <b>${highlighted.priority} Priority</b>
-            </div>
-            <button data-view="track">View Details →</button>
-          </div>
+      <div class="map-surface panel">
+        <div id="community-map" class="leaflet-map" aria-label="Public community map"></div>
+        <div class="map-legend" aria-label="Map legend">
+          <span><b class="legend-dot high"></b>High</span>
+          <span><b class="legend-dot medium"></b>Medium</span>
+          <span><b class="legend-dot low"></b>Low / Resolved</span>
         </div>
       </div>
       <div class="panel">
@@ -927,6 +912,79 @@ function mapView() {
         <div class="incident-list">${incidents.map((incident) => incidentCard(incident, false)).join("")}</div>
       </div>
     </section>
+  `;
+}
+
+function initLeafletMap() {
+  const mapEl = document.querySelector("#community-map");
+  if (!mapEl || typeof window.L === "undefined") {
+    mapEl?.classList.add("map-unavailable");
+    if (mapEl) mapEl.innerHTML = "<p>Map is loading. Please refresh if it does not appear.</p>";
+    return;
+  }
+
+  const incidents = state.store.incidents.filter((incident) => Number.isFinite(incident.lat) && Number.isFinite(incident.lng));
+  const center = incidents.length ? [incidents[0].lat, incidents[0].lng] : [-1.2864, 36.8219];
+  const map = window.L.map(mapEl, {
+    center,
+    zoom: 12,
+    scrollWheelZoom: false,
+  });
+
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+
+  const markers = incidents.map((incident) => {
+    const marker = window.L.marker([incident.lat, incident.lng], { icon: incidentMarkerIcon(incident) }).addTo(map);
+    marker.bindPopup(mapPopupContent(incident), { maxWidth: 280 });
+    marker.on("click", () => {
+      state.selectedIncidentId = incident.id;
+    });
+    return marker;
+  });
+
+  if (markers.length > 1) {
+    const group = window.L.featureGroup(markers);
+    map.fitBounds(group.getBounds().pad(0.18), { maxZoom: 14 });
+  }
+
+  mapEl.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-map-track]");
+    if (!button) return;
+    state.selectedIncidentId = button.dataset.mapTrack;
+    state.view = "track";
+    render();
+  });
+
+  window.setTimeout(() => map.invalidateSize(), 0);
+}
+
+function incidentMarkerIcon(incident) {
+  const priorityClass = incident.status === "RESOLVED" ? "resolved" : incident.priority.toLowerCase();
+  return window.L.divIcon({
+    className: "",
+    html: `<span class="leaflet-issue-marker ${priorityClass}"><span>${escapeHtml(incident.reportIds.length)}</span></span>`,
+    iconSize: [34, 42],
+    iconAnchor: [17, 40],
+    popupAnchor: [0, -36],
+  });
+}
+
+function mapPopupContent(incident) {
+  return `
+    <article class="leaflet-popup-card">
+      <strong>${escapeHtml(incident.id)}</strong>
+      <span>${escapeHtml(titleCase(incident.category))}</span>
+      <small>${escapeHtml(incident.location)}</small>
+      <div class="inline-metrics">
+        <b>${escapeHtml(titleCase(incident.status))}</b>
+        <b>${incident.reportIds.length} reports</b>
+        <b>${escapeHtml(incident.priority)} Priority</b>
+      </div>
+      <button type="button" data-map-track="${escapeHtml(incident.id)}">View Details -></button>
+    </article>
   `;
 }
 

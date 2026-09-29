@@ -1042,15 +1042,7 @@ h2 {
   position: relative;
   min-height: 560px;
   overflow: hidden;
-  background:
-    linear-gradient(28deg, transparent 0 46%, rgba(255, 255, 255, 0.8) 46% 50%, transparent 50%),
-    linear-gradient(112deg, transparent 0 39%, rgba(255, 255, 255, 0.72) 39% 43%, transparent 43%),
-    linear-gradient(90deg, rgba(20, 51, 43, 0.08) 1px, transparent 1px),
-    linear-gradient(rgba(20, 51, 43, 0.08) 1px, transparent 1px),
-    radial-gradient(circle at 22% 28%, rgba(47, 133, 90, 0.23), transparent 22%),
-    radial-gradient(circle at 78% 62%, rgba(245, 200, 75, 0.25), transparent 24%),
-    #e9eee5;
-  background-size: 54px 54px, 54px 54px, auto, auto, auto;
+  background: #dfe8e4;
 }
 
 .map-filter {
@@ -1080,85 +1072,135 @@ h2 {
   width: auto;
 }
 
-.map-surface::before,
-.map-surface::after {
-  content: "";
+.leaflet-map {
   position: absolute;
-  inset: 25% -10%;
-  height: 46px;
-  rotate: -18deg;
-  background: rgba(255, 253, 250, 0.72);
-  border: 1px solid rgba(23, 35, 31, 0.08);
+  inset: 0;
+  z-index: 1;
+  background: #dfe8e4;
 }
 
-.map-surface::after {
-  inset: 56% -20%;
-  rotate: 24deg;
+.leaflet-map.map-unavailable {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: #53615b;
+  text-align: center;
 }
 
-.pin {
-  position: absolute;
-  left: var(--x);
-  top: var(--y);
-  z-index: 2;
-  border: 0;
-  border-radius: 999px;
+.leaflet-issue-marker {
+  position: relative;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 3px solid #ffffff;
+  border-radius: 999px 999px 999px 4px;
   background: #ef4444;
-  color: white;
-  padding: 10px 12px;
-  font-size: 0.8rem;
-  font-weight: 900;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  color: #ffffff;
+  box-shadow: 0 12px 26px rgba(13, 55, 44, 0.3);
+  transform: rotate(-45deg);
 }
 
-.pin.medium {
+.leaflet-issue-marker span {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 0.72rem;
+  font-weight: 950;
+  transform: rotate(45deg);
+}
+
+.leaflet-issue-marker.medium {
   background: #f7b500;
 }
 
-.pin.low,
-.pin.resolved {
+.leaflet-issue-marker.low,
+.leaflet-issue-marker.resolved {
   background: #00984f;
 }
 
-.map-popup {
-  position: absolute;
-  top: 16%;
-  right: 6%;
-  z-index: 3;
-  display: grid;
-  grid-template-columns: 96px 1fr;
-  gap: 14px;
-  width: min(390px, calc(100% - 36px));
-  border: 1px solid rgba(23, 35, 31, 0.1);
+.leaflet-popup-content-wrapper {
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
-  padding: 14px;
   box-shadow: 0 18px 42px rgba(13, 55, 44, 0.18);
 }
 
-.map-popup strong,
-.map-popup span,
-.map-popup small {
+.leaflet-popup-content {
+  margin: 14px;
+  font-family:
+    "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.leaflet-popup-card {
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.leaflet-popup-card strong,
+.leaflet-popup-card span,
+.leaflet-popup-card small {
   display: block;
 }
 
-.map-popup span {
-  margin-top: 2px;
+.leaflet-popup-card span {
   font-weight: 800;
 }
 
-.map-popup small {
-  margin: 2px 0 8px;
+.leaflet-popup-card small {
   color: #66736e;
 }
 
-.map-popup button {
-  margin-top: 8px;
+.leaflet-popup-card button {
+  justify-self: start;
   border: 0;
   background: transparent;
   color: #006ce5;
   font-weight: 900;
   padding: 0;
+}
+
+.map-legend {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: calc(100% - 28px);
+  border: 1px solid rgba(23, 35, 31, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 8px 10px;
+  box-shadow: 0 12px 28px rgba(13, 55, 44, 0.13);
+}
+
+.map-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #34413c;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #ef4444;
+}
+
+.legend-dot.medium {
+  background: #f7b500;
+}
+
+.legend-dot.low {
+  background: #00984f;
 }
 
 .mini-photo {
@@ -1543,14 +1585,6 @@ h2 {
     min-height: 380px;
   }
 
-  .map-popup {
-    right: 12px;
-    bottom: 12px;
-    top: auto;
-    grid-template-columns: 76px 1fr;
-    width: calc(100% - 24px);
-  }
-
   .tracking-card,
   .timeline-panel,
   .report-panel,
@@ -1621,12 +1655,10 @@ h2 {
     min-height: 124px;
   }
 
-  .map-popup {
-    grid-template-columns: 1fr;
-  }
-
-  .map-popup .mini-photo {
-    display: none;
+  .map-legend {
+    right: 10px;
+    bottom: 10px;
+    border-radius: 8px;
   }
 
   .incident-card {
@@ -1641,10 +1673,6 @@ h2 {
   .report-modal-media,
   .report-modal-media .empty-photo {
     min-height: 240px;
-  }
-
-  .pin span {
-    display: none;
   }
 
   .footer-links {

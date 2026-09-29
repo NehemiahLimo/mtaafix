@@ -99,7 +99,8 @@ jobs:
 
       - name: Upload frontend assets
         run: |
-          aws s3 cp index.html "s3://${{ steps.stack.outputs.website_bucket }}/index.html" \
+          sed "s/__MTAAFIX_ASSET_VERSION__/${GITHUB_SHA}/g" index.html > /tmp/mtaafix-index.html
+          aws s3 cp /tmp/mtaafix-index.html "s3://${{ steps.stack.outputs.website_bucket }}/index.html" \
             --content-type text/html \
             --cache-control "no-cache, no-store, must-revalidate" \
             --only-show-errors

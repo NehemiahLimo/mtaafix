@@ -555,6 +555,71 @@ select:focus {
   opacity: 0;
 }
 
+.location-picker {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(23, 35, 31, 0.12);
+  border-radius: 8px;
+  background: #f8faf9;
+  padding: 12px;
+}
+
+.location-picker-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.location-picker-head strong,
+.location-picker-head small {
+  display: block;
+}
+
+.location-picker-head small {
+  margin-top: 4px;
+  color: #66736e;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.location-picker-head .light-button {
+  min-height: 38px;
+  padding: 9px 13px;
+  white-space: nowrap;
+}
+
+.report-location-map {
+  position: relative;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid rgba(23, 35, 31, 0.1);
+  border-radius: 8px;
+  background: #dfe8e4;
+}
+
+.coordinate-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.coordinate-summary span {
+  border-radius: 8px;
+  background: #ffffff;
+  color: #66736e;
+  padding: 9px 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.coordinate-summary strong {
+  display: block;
+  margin-top: 2px;
+  color: #17231f;
+  font-size: 0.95rem;
+}
+
 .ai-banner {
   margin-bottom: 12px;
   border-radius: 8px;
@@ -1246,6 +1311,10 @@ h2 {
   background: #00984f;
 }
 
+.leaflet-issue-marker.report-pin {
+  background: #1d73e8;
+}
+
 .leaflet-popup-content-wrapper {
   border-radius: 8px;
   background: #ffffff;
@@ -1731,6 +1800,15 @@ h2 {
 
   .photo-preview {
     min-height: 230px;
+  }
+
+  .location-picker-head,
+  .coordinate-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .location-picker-head .light-button {
+    width: 100%;
   }
 
   .map-filter {

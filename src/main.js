@@ -28,6 +28,12 @@ let state = {
   uploadStatus: "",
   selectedPhotoName: "",
   selectedPhotoPreviewUrl: "",
+  reportLocation: {
+    label: "Ngong Road, Nairobi",
+    lat: -1.2862,
+    lng: 36.8222,
+    status: "Drop the pin on the issue location or use your current position.",
+  },
   adminReportsByIncident: {},
   adminLoadingIncidentId: "",
   adminFilters: {
@@ -490,6 +496,7 @@ function reportView() {
   const triage = state.lastTriage;
   const pendingPhotoName = state.pendingReport?.photoName || state.selectedPhotoName;
   const previewUrl = state.selectedPhotoPreviewUrl;
+  const reportLocation = state.reportLocation;
 
   return `
     <section class="workspace report-layout">
@@ -520,12 +527,24 @@ function reportView() {
           </div>
           <label>Describe the issue<textarea name="description" required rows="5" placeholder="There is a huge pothole near the junction and cars keep swerving around it."></textarea></label>
           <div class="grid two">
-            <label>Location<input name="location" required value="Ngong Road, Nairobi" /></label>
+            <label>Location name<input name="location" required value="${escapeHtml(reportLocation.label)}" /></label>
             <label>Contact for updates<input name="contact" placeholder="email or phone, optional" /></label>
           </div>
-          <div class="grid two">
-            <label>Latitude<input name="lat" type="number" step="0.0001" value="-1.2862" /></label>
-            <label>Longitude<input name="lng" type="number" step="0.0001" value="36.8222" /></label>
+          <div class="location-picker">
+            <div class="location-picker-head">
+              <div>
+                <strong>Issue pin</strong>
+                <small id="location-status">${escapeHtml(reportLocation.status)}</small>
+              </div>
+              <button class="light-button" type="button" id="use-current-location">Use current location</button>
+            </div>
+            <div id="report-location-map" class="report-location-map" aria-label="Choose issue location on map"></div>
+            <div class="coordinate-summary">
+              <span>Latitude <strong data-lat-display>${reportLocation.lat.toFixed(5)}</strong></span>
+              <span>Longitude <strong data-lng-display>${reportLocation.lng.toFixed(5)}</strong></span>
+            </div>
+            <input name="lat" type="hidden" value="${reportLocation.lat}" />
+            <input name="lng" type="hidden" value="${reportLocation.lng}" />
           </div>
           <button class="primary" type="submit" ${state.isBusy ? "disabled" : ""}>${state.isBusy ? "Checking..." : "Continue →"}</button>
         </form>
@@ -594,6 +613,8 @@ function bindReport() {
   });
 
   const form = app.querySelector("#report-form");
+  initReportLocationPicker(form);
+
   form?.querySelector('input[name="photo"]')?.addEventListener("change", (event) => {
     const file = event.currentTarget.files?.[0];
     setSelectedPhoto(file);
@@ -612,10 +633,11 @@ function bindReport() {
     const description = String(formData.get("description") || "").trim();
     const location = String(formData.get("location") || "").trim();
     const contact = String(formData.get("contact") || "").trim();
-    const lat = Number(formData.get("lat") || -1.2862);
-    const lng = Number(formData.get("lng") || 36.8222);
+    const lat = Number(formData.get("lat") || state.reportLocation.lat);
+    const lng = Number(formData.get("lng") || state.reportLocation.lng);
     const file = formData.get("photo");
     if (file?.name) setSelectedPhoto(file);
+    updateReportLocation(lat, lng, location || "Pinned issue location", "Pin selected for this report.");
 
     state.pendingReport = {
       description,
@@ -658,6 +680,105 @@ function bindReport() {
     if (state.lastDuplicate) await completeReport(state.lastDuplicate.incident.id);
   });
   app.querySelector("#new-issue")?.addEventListener("click", async () => completeReport());
+}
+
+function initReportLocationPicker(form) {
+  if (!form) return;
+  const mapEl = form.querySelector("#report-location-map");
+  const latInput = form.querySelector('input[name="lat"]');
+  const lngInput = form.querySelector('input[name="lng"]');
+  const locationInput = form.querySelector('input[name="location"]');
+  const latDisplay = form.querySelector("[data-lat-display]");
+  const lngDisplay = form.querySelector("[data-lng-display]");
+  const statusEl = form.querySelector("#location-status");
+
+  const syncLocation = (lat, lng, status) => {
+    updateReportLocation(lat, lng, locationInput?.value || state.reportLocation.label, status);
+    if (latInput) latInput.value = String(lat);
+    if (lngInput) lngInput.value = String(lng);
+    if (latDisplay) latDisplay.textContent = lat.toFixed(5);
+    if (lngDisplay) lngDisplay.textContent = lng.toFixed(5);
+    if (statusEl) statusEl.textContent = status;
+  };
+
+  let movePin = syncLocation;
+
+  if (!mapEl || typeof window.L === "undefined") {
+    mapEl?.classList.add("map-unavailable");
+    if (mapEl) mapEl.innerHTML = "<p>Map picker is loading. You can still use current location.</p>";
+  } else {
+    const map = window.L.map(mapEl, {
+      center: [state.reportLocation.lat, state.reportLocation.lng],
+      zoom: 15,
+      scrollWheelZoom: false,
+    });
+
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    const marker = window.L.marker([state.reportLocation.lat, state.reportLocation.lng], {
+      draggable: true,
+      icon: reportLocationIcon(),
+    }).addTo(map);
+
+    movePin = (lat, lng, status) => {
+      marker.setLatLng([lat, lng]);
+      map.panTo([lat, lng]);
+      syncLocation(lat, lng, status);
+    };
+
+    map.on("click", (event) => {
+      movePin(event.latlng.lat, event.latlng.lng, "Pin moved to selected map point.");
+    });
+    marker.on("dragend", () => {
+      const point = marker.getLatLng();
+      syncLocation(point.lat, point.lng, "Pin adjusted manually.");
+    });
+    window.setTimeout(() => map.invalidateSize(), 0);
+  }
+
+  form.querySelector("#use-current-location")?.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+      if (statusEl) statusEl.textContent = "Current location is not available in this browser.";
+      return;
+    }
+    if (statusEl) statusEl.textContent = "Waiting for browser location permission...";
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        movePin(latitude, longitude, "Using your current browser location.");
+      },
+      () => {
+        if (statusEl) statusEl.textContent = "Could not access current location. Drop the pin manually.";
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  });
+
+  locationInput?.addEventListener("input", () => {
+    state.reportLocation.label = locationInput.value;
+  });
+}
+
+function updateReportLocation(lat, lng, label, status) {
+  state.reportLocation = {
+    label,
+    lat,
+    lng,
+    status,
+  };
+}
+
+function reportLocationIcon() {
+  return window.L.divIcon({
+    className: "",
+    html: '<span class="leaflet-issue-marker report-pin"><span>!</span></span>',
+    iconSize: [34, 42],
+    iconAnchor: [17, 40],
+    popupAnchor: [0, -36],
+  });
 }
 
 function classifyReport(description) {

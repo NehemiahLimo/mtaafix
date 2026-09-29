@@ -105,7 +105,7 @@ jobs:
             --only-show-errors
           aws s3 sync src "s3://${{ steps.stack.outputs.website_bucket }}/src" \
             --delete \
-            --cache-control "public, max-age=60, must-revalidate" \
+            --cache-control "no-cache, no-store, must-revalidate" \
             --only-show-errors
           aws s3 sync public "s3://${{ steps.stack.outputs.website_bucket }}/public" \
             --delete \

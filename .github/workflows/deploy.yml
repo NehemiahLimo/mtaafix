@@ -76,9 +76,16 @@ jobs:
         run: |
           aws s3 cp index.html "s3://${{ steps.stack.outputs.website_bucket }}/index.html" \
             --content-type text/html \
-            --cache-control no-cache
-          aws s3 sync src "s3://${{ steps.stack.outputs.website_bucket }}/src" --delete
-          aws s3 sync public "s3://${{ steps.stack.outputs.website_bucket }}/public" --delete
+            --cache-control "no-cache, no-store, must-revalidate"
+          aws s3 sync src "s3://${{ steps.stack.outputs.website_bucket }}/src" \
+            --delete \
+            --cache-control "public, max-age=60, must-revalidate"
+          aws s3 sync public "s3://${{ steps.stack.outputs.website_bucket }}/public" \
+            --delete \
+            --cache-control "public, max-age=86400"
+          aws s3 cp public/favicon.svg "s3://${{ steps.stack.outputs.website_bucket }}/favicon.svg" \
+            --content-type image/svg+xml \
+            --cache-control "public, max-age=86400"
 
       - name: Invalidate CloudFront
         run: |

@@ -20,6 +20,27 @@ Then open `http://127.0.0.1:5173/`.
 
 No package install is required for the current static prototype.
 
+Run the local backend logic tests:
+
+```bash
+npm run api:test
+```
+
+The AWS backend scaffold lives in `api/` and `infra/`.
+
+For deployment work, install dependencies in the two backend workspaces:
+
+```bash
+npm --prefix api install
+npm --prefix infra install
+```
+
+Then synthesize the low-cost AWS stack:
+
+```bash
+npm run infra:synth
+```
+
 ## Demo Notes
 
 The app seeds a duplicate candidate:
@@ -48,16 +69,18 @@ Target AWS MVP:
 - API Gateway + Lambda for report, incident, admin, and tracking APIs.
 - DynamoDB for reports, incidents, and incident events.
 - S3 for uploaded photos.
-- Amazon Bedrock for classification, summarization, and duplicate assistance.
+- Rule-based Lambda triage for classification, summarization, priority, and duplicate assistance.
 - Cognito for administrator authentication.
 - EventBridge + SES/SNS for citizen updates.
 - CloudWatch for logs and metrics.
 
 See [docs/aws-architecture.md](docs/aws-architecture.md) for the full AWS solution architecture.
+See [docs/api-contracts.md](docs/api-contracts.md) for the first backend API contracts.
+See [docs/deployment.md](docs/deployment.md) for the AWS deployment runbook.
 
 ## Next Increment
 
 1. Move the local data model into a small API contract.
 2. Add AWS CDK for DynamoDB, S3, API Gateway, Lambda, and Cognito.
-3. Replace the local triage module with a Lambda interface that can call Bedrock.
+3. Replace the local triage module with low-cost rule-based Lambda logic.
 4. Add pre-signed S3 upload flow for photos.

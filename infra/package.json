@@ -1,0 +1,18 @@
+{
+  "name": "@mtaafix/infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MtaaFix low-cost AWS CDK infrastructure",
+  "scripts": {
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.160.0",
+    "constructs": "^10.3.0"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.160.0"
+  }
+}

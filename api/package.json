@@ -1,0 +1,19 @@
+{
+  "name": "@mtaafix/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Low-cost MtaaFix API handlers and rule-based triage",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "check": "node --check handlers/reports.js && node --check handlers/incidents.js && node --check handlers/admin.js && node --check repositories/dynamoStore.js && node --check scripts/seed-demo.js",
+    "seed:demo": "node scripts/seed-demo.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.658.1",
+    "@aws-sdk/client-s3": "^3.658.1",
+    "@aws-sdk/lib-dynamodb": "^3.658.1",
+    "@aws-sdk/s3-request-presigner": "^3.658.1"
+  },
+  "devDependencies": {}
+}

@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "python3 -m http.server 5173 --bind 127.0.0.1",
     "build": "node --check src/main.js",
-    "preview": "python3 -m http.server 5173 --bind 127.0.0.1"
+    "preview": "python3 -m http.server 5173 --bind 127.0.0.1",
+    "api:test": "npm --prefix api test",
+    "api:check": "npm --prefix api run check",
+    "infra:synth": "npm --prefix infra run synth"
   },
   "dependencies": {},
   "devDependencies": {}

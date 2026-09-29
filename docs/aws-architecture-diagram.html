@@ -177,14 +177,14 @@
       <div class="title">
         <div>
           <h1>MtaaFix AWS Solution Architecture</h1>
-          <p class="subtitle">Serverless citizen reporting, AI triage, duplicate detection, authority workflow, and notifications</p>
+          <p class="subtitle">Serverless citizen reporting, low-cost triage, duplicate detection, authority workflow, and notifications</p>
         </div>
         <div class="badge">AWS Serverless MVP</div>
       </div>
 
       <svg viewBox="0 0 1260 840" role="img" aria-labelledby="diagram-title diagram-desc">
         <title id="diagram-title">MtaaFix AWS architecture diagram</title>
-        <desc id="diagram-desc">Architecture diagram showing citizens and administrators reaching a CloudFront hosted web app, API Gateway, Lambda APIs, Cognito, DynamoDB, S3, Bedrock, EventBridge, SES, SNS, CloudWatch, SSM Parameter Store, and AWS CDK.</desc>
+        <desc id="diagram-desc">Architecture diagram showing citizens and administrators reaching a CloudFront hosted web app, API Gateway, Lambda APIs, Cognito, DynamoDB, S3, rule-based triage, EventBridge, SES, SNS, CloudWatch, SSM Parameter Store, and AWS CDK.</desc>
 
         <defs>
           <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
@@ -292,14 +292,14 @@
 
         <!-- Data -->
         <rect class="zone" x="882" y="48" width="338" height="510" />
-        <text class="zone-title" x="906" y="80">Data, AI & Events</text>
+        <text class="zone-title" x="906" y="80">Data, Triage & Events</text>
         <text class="zone-note" x="906" y="101">Structured incidents, photos, triage, updates</text>
 
-        <g id="bedrock">
+        <g id="rules-triage">
           <rect class="service" x="914" y="126" width="128" height="74" />
-          <rect class="icon-bg" x="932" y="142" width="34" height="34" fill="#7d3c98" />
-          <text class="icon-text" x="949" y="160">AI</text>
-          <text class="service-title" x="914" y="187">Bedrock</text>
+          <rect class="icon-bg" x="932" y="142" width="34" height="34" fill="#ff9900" />
+          <text class="icon-text" x="949" y="160">λ</text>
+          <text class="service-title" x="914" y="187">Rules Triage</text>
         </g>
 
         <g id="dynamodb">
@@ -385,7 +385,7 @@
         <path class="flow" d="M690 190 C746 246 746 410 690 422" />
 
         <path class="flow" d="M810 262 C856 238 870 166 914 163" />
-        <text class="flow-label" x="824" y="214">AI triage</text>
+        <text class="flow-label" x="824" y="214">triage</text>
         <path class="flow" d="M810 262 C894 258 974 190 1062 166" />
         <text class="flow-label" x="892" y="244">reports / incidents</text>
 

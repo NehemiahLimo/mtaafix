@@ -11,7 +11,7 @@ The recommended AWS architecture is serverless-first:
 - managed authentication for administrators;
 - durable photo storage;
 - scalable event-driven notifications;
-- meaningful AI through Amazon Bedrock rather than a generic chatbot.
+- meaningful triage through low-cost rule-based Lambda logic first, with a clean path to Bedrock later.
 
 ## Architecture Goals
 
@@ -20,7 +20,7 @@ The recommended AWS architecture is serverless-first:
 - Reports and incidents are modeled separately.
 - Duplicate reports are associated with an existing incident instead of discarded.
 - Public APIs never expose private citizen contact information.
-- AI triage is useful, explainable, and overridable by administrators.
+- Triage is useful, explainable, and overridable by administrators.
 - The MVP can be deployed quickly and evolved without changing the product model.
 
 ## High-Level Architecture
@@ -57,11 +57,11 @@ Report / Track / Map           Verify / Assign / Resolve      Presigned URLs
                       +------------------+
                       |                  |
                       v                  v
-              Amazon Bedrock       Amazon EventBridge
-              AI Triage            Status Events
+              Rules Triage         Amazon EventBridge
+              Lambda               Status Events
                       |                  |
                       v                  v
-              Embeddings or LLM    Notification Lambda
+              Similarity Rules     Notification Lambda
                                          |
                                          v
                                   Amazon SES / SNS
@@ -77,7 +77,8 @@ Report / Track / Map           Verify / Assign / Resolve      Presigned URLs
 | Admin auth | Amazon Cognito | Administrator sign-in, JWTs, password policies, future groups. |
 | Data store | DynamoDB | Serverless storage for reports, incidents, and events. |
 | Photo storage | S3 | Store uploaded issue photos using presigned upload URLs. |
-| AI triage | Amazon Bedrock | Classification, summarization, priority suggestion, duplicate assistance. |
+| Triage | Lambda rule engine | Low-cost classification, summarization, priority suggestion, and duplicate assistance for phase one. |
+| Future AI upgrade | Amazon Bedrock | Optional later enhancement for richer classification, summarization, and duplicate reasoning. |
 | Async events | EventBridge | Decouple status changes and notifications from write APIs. |
 | Notifications | SES and/or SNS | Email/SMS updates to citizens who opt in. |
 | Observability | CloudWatch | Logs, metrics, dashboards, alarms. |
@@ -260,9 +261,9 @@ Admin-only fields may include:
 - internal status management;
 - resolution notes.
 
-## AI Triage Design
+## Triage Design
 
-AI must solve the product problem: turning noisy citizen reports into structured incidents.
+Phase one triage must solve the product problem without expensive infrastructure: turning noisy citizen reports into structured incidents using deterministic Lambda logic.
 
 ### Report Analysis
 
@@ -282,20 +283,23 @@ Output:
 - confidence or similarity score;
 - explanation suitable for admin review.
 
-### Bedrock Usage
+### Phase-One Rule-Based Usage
 
 Recommended MVP approach:
 
-1. Use a Bedrock text model for classification, summarization, and priority.
-2. Use deterministic proximity filtering in Lambda.
-3. Compare only nearby same-category incidents.
-4. Use either Bedrock embeddings or a simpler similarity score for the first demo.
+1. Use keyword and phrase rules for category classification.
+2. Use danger-word rules for priority suggestion.
+3. Use template-based summaries for the first backend.
+4. Use deterministic proximity filtering in Lambda.
+5. Compare only nearby same-category incidents.
+6. Use simple text similarity for the first demo.
 
-Recommended production path:
+Optional future path:
 
-- Generate embeddings for incident summaries and report descriptions.
-- Store embeddings in OpenSearch Serverless vector search or a future vector-capable store.
-- Keep proximity and category filters before vector similarity to reduce cost and false positives.
+- Add `TRIAGE_MODE=BEDROCK` behind the same response contract.
+- Use Bedrock for richer summaries and explanation text.
+- Add embeddings only after real usage shows rule-based duplicate detection is insufficient.
+- Avoid OpenSearch or vector infrastructure until there is clear need.
 
 ## Duplicate Detection Flow
 
@@ -305,7 +309,7 @@ Citizen submits report details
         v
 AnalyzeReport Lambda
         |
-        +--> Bedrock: classify, summarize, priority
+        +--> Rules engine: classify, summarize, priority
         |
         +--> DynamoDB: query open incidents by category / geohash
         |
@@ -416,7 +420,7 @@ CloudWatch dashboards should track:
 - report submission count;
 - duplicate detection rate;
 - incidents by status;
-- AI analysis failures;
+- triage analysis failures;
 - notification delivery failures.
 
 Recommended alarms:
@@ -425,7 +429,7 @@ Recommended alarms:
 - API 5xx spike;
 - DynamoDB throttling;
 - failed EventBridge notification processing;
-- Bedrock invocation failures.
+- rule-based triage failures.
 
 ## Deployment Plan
 
@@ -466,25 +470,27 @@ For the hackathon MVP, these can be combined into fewer stacks if speed matters.
 - Local AI-style triage.
 - Demoable citizen/admin flows.
 
-### Phase 2: Serverless Backend
+### Phase 2: Low-Cost Serverless Backend
 
 - API Gateway + Lambda.
 - DynamoDB tables.
 - S3 photo upload with presigned URLs.
 - Cognito admin login.
+- Rule-based triage Lambda.
+- Rule-based duplicate detection.
 
-### Phase 3: Bedrock AI
-
-- Bedrock classification.
-- Bedrock summarization.
-- Priority suggestion.
-- Duplicate candidate reasoning.
-
-### Phase 4: Notifications and Observability
+### Phase 3: Notifications and Observability
 
 - EventBridge status events.
 - SES email updates.
 - CloudWatch dashboard and alarms.
+
+### Phase 4: Optional Bedrock Upgrade
+
+- Bedrock classification.
+- Bedrock summarization.
+- Duplicate candidate reasoning.
+- Keep the same API contract using `triage.mode`.
 
 ### Phase 5: Production Hardening
 
@@ -504,7 +510,7 @@ This architecture keeps the MVP focused while demonstrating meaningful AWS usage
 - DynamoDB matches the report/incident access patterns.
 - S3 is the natural store for photos.
 - Cognito protects only the admin experience, keeping citizen reporting frictionless.
-- Bedrock directly powers the product’s AI triage and duplicate detection.
+- Rule-based Lambda triage keeps the first deployment inexpensive while preserving a future Bedrock path.
 - EventBridge cleanly separates workflow updates from notifications.
 
 The result is practical for a hackathon demo and credible as the foundation for a real civic reporting platform.

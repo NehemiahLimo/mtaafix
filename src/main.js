@@ -923,7 +923,8 @@ function initLeafletMap() {
     return;
   }
 
-  const incidents = state.store.incidents.filter((incident) => Number.isFinite(incident.lat) && Number.isFinite(incident.lng));
+  const validIncidents = state.store.incidents.filter((incident) => Number.isFinite(incident.lat) && Number.isFinite(incident.lng));
+  const incidents = validIncidents.filter(isNairobiCoordinate);
   const center = incidents.length ? [incidents[0].lat, incidents[0].lng] : [-1.2864, 36.8219];
   const map = window.L.map(mapEl, {
     center,
@@ -959,6 +960,10 @@ function initLeafletMap() {
   });
 
   window.setTimeout(() => map.invalidateSize(), 0);
+}
+
+function isNairobiCoordinate(incident) {
+  return incident.lat >= -1.55 && incident.lat <= -1.05 && incident.lng >= 36.55 && incident.lng <= 37.1;
 }
 
 function incidentMarkerIcon(incident) {

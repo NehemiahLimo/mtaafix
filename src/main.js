@@ -1,4 +1,7 @@
 const STORAGE_KEY = "mtaafix.mvp.store";
+const DEPLOYED_API_BASE_URL = "https://se8ispcqr9.execute-api.eu-west-1.amazonaws.com";
+const COGNITO_REGION = "eu-west-1";
+const COGNITO_CLIENT_ID = "1ivmiaevho085a7kardun9ekij";
 const statusOrder = ["REPORTED", "VERIFIED", "ASSIGNED", "IN_PROGRESS", "RESOLVED"];
 const reportCategories = [
   ["ROAD_DAMAGE", "Road Damage", "Potholes, cracked roads", "〽"],
@@ -20,12 +23,22 @@ let state = {
   adminAuthed: false,
   selectedCategory: "ROAD_DAMAGE",
   successIncidentId: "",
+  apiOnline: false,
+  isBusy: false,
+  uploadStatus: "",
+  adminToken: sessionStorage.getItem("mtaafix.admin.token") || "",
 };
 
 const app = document.querySelector("#app");
 if (!app) throw new Error("App root not found");
 
-render();
+init();
+
+function init() {
+  if (state.adminToken) state.adminAuthed = true;
+  render();
+  refreshPublicIncidents().then(() => render());
+}
 
 function loadStore() {
   const existing = localStorage.getItem(STORAGE_KEY);
@@ -98,6 +111,164 @@ function saveStore(store = state.store) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
 }
 
+async function apiFetch(pathValue, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), options.timeoutMs || 8000);
+  try {
+    const response = await fetch(`${apiBaseUrl()}${pathValue}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "content-type": "application/json",
+        ...(options.headers || {}),
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.message || payload.error || `Request failed with ${response.status}`);
+    }
+    return payload;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function apiBaseUrl() {
+  const hostname = window.location.hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.includes("s3-website")) {
+    return DEPLOYED_API_BASE_URL;
+  }
+  return "";
+}
+
+async function uploadReportPhoto(file) {
+  if (!file || !file.name) return null;
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("Photo must be 5 MB or smaller.");
+  }
+
+  const presign = await apiFetch("/v1/uploads/presign", {
+    method: "POST",
+    body: JSON.stringify({
+      contentType: file.type || "application/octet-stream",
+      contentLength: file.size,
+    }),
+  });
+
+  const uploadResponse = await fetch(presign.uploadUrl, {
+    method: "PUT",
+    headers: presign.requiredHeaders || { "Content-Type": file.type },
+    body: file,
+  });
+  if (!uploadResponse.ok) {
+    throw new Error(`Photo upload failed with ${uploadResponse.status}.`);
+  }
+  return presign.photoKey;
+}
+
+async function refreshPublicIncidents() {
+  try {
+    const payload = await apiFetch("/v1/incidents/public");
+    const incidents = (payload.items || []).map((item) => apiIncidentToLocal(item));
+    if (incidents.length) {
+      state.store.incidents = incidents;
+      state.selectedIncidentId ||= incidents[0].id;
+      saveStore();
+    }
+    state.apiOnline = true;
+  } catch (error) {
+    state.apiOnline = false;
+  }
+}
+
+async function loadTrackingIncident(incidentId) {
+  if (!incidentId) return null;
+  try {
+    const payload = await apiFetch(`/v1/tracking/${encodeURIComponent(incidentId)}`);
+    const incident = apiIncidentToLocal(payload.incident, payload.timeline || []);
+    upsertIncident(incident);
+    state.apiOnline = true;
+    return incident;
+  } catch (error) {
+    state.apiOnline = false;
+    return state.store.incidents.find((item) => item.id === incidentId) || null;
+  }
+}
+
+function upsertIncident(incident) {
+  const existingIndex = state.store.incidents.findIndex((item) => item.id === incident.id);
+  if (existingIndex >= 0) state.store.incidents.splice(existingIndex, 1, incident);
+  else state.store.incidents.unshift(incident);
+  saveStore();
+}
+
+function apiIncidentToLocal(incident, timeline = []) {
+  const reportCount = Number(incident.reportCount || 0);
+  return {
+    id: incident.incidentId,
+    category: incident.category,
+    summary: incident.summary,
+    priority: incident.priority,
+    status: incident.status,
+    location: incident.location?.label || "Nairobi, Kenya",
+    lat: Number(incident.location?.lat || -1.2862),
+    lng: Number(incident.location?.lng || 36.8222),
+    assignedTo: incident.assignedTo,
+    reportIds: Array.from({ length: Math.max(reportCount, 1) }, (_, index) => `R${String(index + 1).padStart(3, "0")}`),
+    createdAt: incident.createdAt,
+    updatedAt: incident.updatedAt,
+    resolution: incident.resolution,
+    events: timeline.length
+      ? timeline.map((event) => makeEvent(event.label, event.detail, event.at))
+      : [makeEvent("Reported", "Citizen report received.", incident.createdAt)],
+  };
+}
+
+function apiDuplicateToLocal(duplicate) {
+  if (!duplicate?.found || !duplicate.incident) return null;
+  return {
+    incident: apiIncidentToLocal(duplicate.incident),
+    distance: duplicate.distanceMeters || duplicate.distance || 0,
+    similarity: Math.round(Number(duplicate.similarity || 0) * 100),
+  };
+}
+
+async function cognitoSignIn(email, password) {
+  const response = await fetch(`https://cognito-idp.${COGNITO_REGION}.amazonaws.com/`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-amz-json-1.1",
+      "x-amz-target": "AWSCognitoIdentityProviderService.InitiateAuth",
+    },
+    body: JSON.stringify({
+      AuthFlow: "USER_PASSWORD_AUTH",
+      ClientId: COGNITO_CLIENT_ID,
+      AuthParameters: { USERNAME: email, PASSWORD: password },
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || "Unable to sign in.");
+  return payload.AuthenticationResult?.IdToken;
+}
+
+async function adminFetch(pathValue, options = {}) {
+  return apiFetch(pathValue, {
+    ...options,
+    headers: {
+      authorization: `Bearer ${state.adminToken}`,
+      ...(options.headers || {}),
+    },
+  });
+}
+
+async function refreshAdminIncidents() {
+  if (!state.adminToken) return;
+  const payload = await adminFetch("/v1/admin/incidents");
+  state.store.incidents = (payload.items || []).map((item) => apiIncidentToLocal(item));
+  state.selectedIncidentId ||= state.store.incidents[0]?.id || "";
+  saveStore();
+}
+
 function makeEvent(label, detail, at = new Date().toISOString()) {
   return { id: crypto.randomUUID(), label, detail, at };
 }
@@ -150,7 +321,7 @@ function footerView() {
           <a class="brand" href="#" data-view="home" aria-label="MtaaFix home footer">
             <img class="brand-logo footer-logo" src="/public/mtaafix-logo-web.png" alt="MtaaFix" />
           </a>
-          <p>AI-assisted reporting that turns resident submissions into structured, trackable incidents.</p>
+          <p>Rules-based reporting that turns resident submissions into structured, trackable incidents.</p>
         </div>
         <div class="footer-links" aria-label="Footer navigation">
           <button data-view="report">Report</button>
@@ -215,10 +386,11 @@ function homeView() {
 }
 
 function bindHome() {
-  app.querySelector("#home-track")?.addEventListener("submit", (event) => {
+  app.querySelector("#home-track")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const tracking = String(new FormData(event.currentTarget).get("tracking") || "").trim().toUpperCase();
     state.selectedIncidentId = tracking || "MTF-2026-00182";
+    await loadTrackingIncident(state.selectedIncidentId);
     state.view = "track";
     render();
   });
@@ -235,7 +407,7 @@ function aboutView() {
         <div class="section-title"><span>About MtaaFix</span><strong>Community reports, consolidated into action.</strong></div>
         <p>MtaaFix helps residents report infrastructure issues without creating an account, while giving authorities a structured queue of incidents to verify, assign, and resolve.</p>
         <div class="stat-row">
-          ${metric("AI triage", "Classification, priority, duplicates")}
+          ${metric("Rules triage", "Classification, priority, duplicates")}
           ${metric("Privacy", "Public-safe incident views")}
           ${metric("AWS path", "Serverless MVP")}
           ${metric("Workflow", "Reported to resolved")}
@@ -253,6 +425,7 @@ function aboutView() {
 function reportView() {
   const duplicate = state.lastDuplicate;
   const triage = state.lastTriage;
+  const pendingPhotoName = state.pendingReport?.photoName;
 
   return `
     <section class="workspace report-layout">
@@ -275,10 +448,10 @@ function reportView() {
         <form id="report-form" class="stack">
           <div class="photo-uploader">
             <div class="photo-preview">
-              <span>Road surface photo</span>
+              <span>${pendingPhotoName || "Road surface photo"}</span>
             </div>
             <label class="file-button">Take or choose photo<input name="photo" type="file" accept="image/*" /></label>
-            <small>Supported: JPG, PNG. For the demo we store only the filename.</small>
+            <small>Supported: JPG, PNG, WEBP. Max 5 MB.</small>
           </div>
           <label>Describe the issue<textarea name="description" required rows="5" placeholder="There is a huge pothole near the junction and cars keep swerving around it."></textarea></label>
           <div class="grid two">
@@ -289,16 +462,18 @@ function reportView() {
             <label>Latitude<input name="lat" type="number" step="0.0001" value="-1.2862" /></label>
             <label>Longitude<input name="lng" type="number" step="0.0001" value="36.8222" /></label>
           </div>
-          <button class="primary" type="submit">Continue →</button>
+          <button class="primary" type="submit" ${state.isBusy ? "disabled" : ""}>${state.isBusy ? "Checking..." : "Continue →"}</button>
         </form>
       </div>
 
       <aside class="panel result-panel">
-        <div class="section-title"><span>Details & Submit</span><strong>${triage ? "AI analysis complete" : "Review appears here"}</strong></div>
+        <div class="section-title"><span>Details & Submit</span><strong>${triage ? "Review complete" : "Review appears here"}</strong></div>
         ${
           triage
             ? `
-              <div class="ai-banner">✣ We've analysed your report using AI</div>
+              <div class="ai-banner">✣ We've checked category, priority, and possible duplicates</div>
+              ${pendingPhotoName ? `<p class="upload-note">Photo ready: <strong>${pendingPhotoName}</strong></p>` : ""}
+              ${state.uploadStatus ? `<p class="upload-note">${state.uploadStatus}</p>` : ""}
               <div class="triage-grid">
                 ${metric("Category", triage.category)}
                 ${metric("Priority", triage.priority)}
@@ -318,14 +493,14 @@ function reportView() {
                       </div>
                     </div>
                     <div class="actions">
-                      <button class="primary" id="same-issue">✓ Yes, add my report</button>
-                      <button id="new-issue">◇ No, create new issue</button>
+                      <button class="primary" id="same-issue" ${state.isBusy ? "disabled" : ""}>${state.isBusy ? "Submitting..." : "✓ Yes, add my report"}</button>
+                      <button id="new-issue" ${state.isBusy ? "disabled" : ""}>◇ No, create new issue</button>
                     </div>
                   `
-                  : `<p class="empty">No likely duplicate found nearby.</p><button class="primary full" id="new-issue">Submit report</button>`
+                  : `<p class="empty">No likely duplicate found nearby.</p><button class="primary full" id="new-issue" ${state.isBusy ? "disabled" : ""}>${state.isBusy ? "Submitting..." : "Submit report"}</button>`
               }
             `
-            : `<p class="empty">Choose a category, add a photo, provide the location, and describe what happened. The AI check runs before submission.</p>`
+            : `<p class="empty">${state.isBusy ? "Checking category, priority, and duplicate reports..." : "Choose a category, add a photo, provide the location, and describe what happened. The duplicate check runs before submission."}</p>`
         }
       </aside>
     </section>
@@ -354,7 +529,7 @@ function bindReport() {
   });
 
   const form = app.querySelector("#report-form");
-  form?.addEventListener("submit", (event) => {
+  form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(form);
     const description = String(formData.get("description") || "").trim();
@@ -364,9 +539,6 @@ function bindReport() {
     const lng = Number(formData.get("lng") || 36.8222);
     const file = formData.get("photo");
 
-    const triage = classifyReport(description);
-    triage.category = state.selectedCategory;
-    state.lastTriage = triage;
     state.pendingReport = {
       description,
       location,
@@ -374,15 +546,40 @@ function bindReport() {
       lat,
       lng,
       photoName: file?.name || undefined,
+      photoFile: file?.name ? file : null,
     };
-    state.lastDuplicate = findDuplicate(description, triage.category, lat, lng);
+    state.uploadStatus = "";
+    state.isBusy = true;
+    render();
+
+    try {
+      const analysis = await apiFetch("/v1/reports/analyze", {
+        method: "POST",
+        body: JSON.stringify({
+          description,
+          categoryHint: state.selectedCategory,
+          location: { label: location, lat, lng },
+        }),
+      });
+      state.lastTriage = analysis.triage;
+      state.lastDuplicate = apiDuplicateToLocal(analysis.duplicate);
+      state.apiOnline = true;
+    } catch (error) {
+      const triage = classifyReport(description);
+      triage.category = state.selectedCategory;
+      state.lastTriage = triage;
+      state.lastDuplicate = findDuplicate(description, triage.category, lat, lng);
+      state.apiOnline = false;
+    } finally {
+      state.isBusy = false;
+    }
     render();
   });
 
-  app.querySelector("#same-issue")?.addEventListener("click", () => {
-    if (state.lastDuplicate) completeReport(state.lastDuplicate.incident.id);
+  app.querySelector("#same-issue")?.addEventListener("click", async () => {
+    if (state.lastDuplicate) await completeReport(state.lastDuplicate.incident.id);
   });
-  app.querySelector("#new-issue")?.addEventListener("click", () => completeReport());
+  app.querySelector("#new-issue")?.addEventListener("click", async () => completeReport());
 }
 
 function classifyReport(description) {
@@ -423,7 +620,65 @@ function findDuplicate(description, category, lat, lng) {
   return candidates[0] || null;
 }
 
-function completeReport(existingIncidentId) {
+async function completeReport(existingIncidentId) {
+  if (!state.pendingReport || !state.lastTriage) return;
+  state.isBusy = true;
+  state.uploadStatus = state.pendingReport.photoFile ? "Uploading photo..." : "";
+  render();
+
+  let photoKey = null;
+  try {
+    photoKey = await uploadReportPhoto(state.pendingReport.photoFile);
+    state.uploadStatus = photoKey ? "Photo uploaded successfully." : "";
+  } catch (error) {
+    state.isBusy = false;
+    state.uploadStatus = "";
+    alert(error.message);
+    render();
+    return;
+  }
+
+  try {
+    const contact = contactPayload(state.pendingReport.contact);
+    const payload = await apiFetch("/v1/reports", {
+      method: "POST",
+      body: JSON.stringify({
+        description: state.pendingReport.description,
+        location: {
+          label: state.pendingReport.location,
+          lat: state.pendingReport.lat,
+          lng: state.pendingReport.lng,
+        },
+        contact,
+        photoKey,
+        triage: state.lastTriage,
+        duplicateDecision: existingIncidentId
+          ? { action: "ATTACH_TO_EXISTING", incidentId: existingIncidentId }
+          : { action: "CREATE_NEW" },
+      }),
+    });
+    const incident = apiIncidentToLocal(payload.publicIncident);
+    upsertIncident(incident);
+    state.selectedIncidentId = payload.incidentId;
+    state.successIncidentId = payload.incidentId;
+    state.lastTriage = null;
+    state.lastDuplicate = null;
+    state.pendingReport = null;
+    state.apiOnline = true;
+    state.isBusy = false;
+    state.uploadStatus = "";
+    state.view = "success";
+    render();
+    return;
+  } catch (error) {
+    state.apiOnline = false;
+    state.isBusy = false;
+    state.uploadStatus = "";
+  }
+  completeReportLocally(existingIncidentId);
+}
+
+function completeReportLocally(existingIncidentId) {
   if (!state.pendingReport || !state.lastTriage) return;
   const createdAt = new Date().toISOString();
   const reportId = `R${String(state.store.nextReportNumber++).padStart(3, "0")}`;
@@ -449,7 +704,8 @@ function completeReport(existingIncidentId) {
 
   const incident = state.store.incidents.find((item) => item.id === incidentId);
   if (!incident) return;
-  const report = { id: reportId, incidentId, createdAt, ...state.pendingReport };
+  const { photoFile, ...pendingReport } = state.pendingReport;
+  const report = { id: reportId, incidentId, createdAt, ...pendingReport };
 
   incident.reportIds.push(reportId);
   incident.updatedAt = createdAt;
@@ -460,9 +716,19 @@ function completeReport(existingIncidentId) {
   state.lastTriage = null;
   state.lastDuplicate = null;
   state.pendingReport = null;
+  state.isBusy = false;
+  state.uploadStatus = "";
   state.view = "success";
   saveStore();
   render();
+}
+
+function contactPayload(value) {
+  if (!value) return {};
+  const trimmed = String(value).trim();
+  if (!trimmed) return {};
+  if (trimmed.includes("@")) return { email: trimmed, notify: true };
+  return { phone: trimmed, notify: true };
 }
 
 function successView() {
@@ -525,10 +791,11 @@ function trackView() {
 }
 
 function bindTrack() {
-  app.querySelector("#track-form")?.addEventListener("submit", (event) => {
+  app.querySelector("#track-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const tracking = String(new FormData(event.currentTarget).get("tracking") || "").trim().toUpperCase();
     state.selectedIncidentId = tracking;
+    await loadTrackingIncident(tracking);
     render();
   });
 }
@@ -593,10 +860,10 @@ function adminView() {
         <div class="panel">
           <div class="section-title"><span>Administrator</span><strong>Sign in to manage incidents</strong></div>
           <form id="admin-login" class="stack">
-            <label>Email<input name="email" type="email" value="admin@mtaafix.local" /></label>
-            <label>Password<input name="password" type="password" value="demo-admin" /></label>
+            <label>Email<input name="email" type="email" placeholder="admin@example.com" /></label>
+            <label>Password<input name="password" type="password" placeholder="Cognito password" /></label>
             <button class="primary">Sign in</button>
-            <p class="empty">Demo credentials are prefilled. In AWS this boundary maps to Cognito.</p>
+            <p class="empty">Protected by the deployed Cognito user pool. Create an admin user in AWS before signing in.</p>
           </form>
         </div>
       </section>
@@ -620,10 +887,20 @@ function adminView() {
 }
 
 function bindAdmin() {
-  app.querySelector("#admin-login")?.addEventListener("submit", (event) => {
+  app.querySelector("#admin-login")?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    state.adminAuthed = true;
-    render();
+    const formData = new FormData(event.currentTarget);
+    try {
+      const token = await cognitoSignIn(String(formData.get("email") || ""), String(formData.get("password") || ""));
+      if (!token) throw new Error("Cognito did not return an ID token.");
+      state.adminToken = token;
+      sessionStorage.setItem("mtaafix.admin.token", token);
+      state.adminAuthed = true;
+      await refreshAdminIncidents();
+      render();
+    } catch (error) {
+      alert(error.message);
+    }
   });
 
   app.querySelectorAll("[data-select-incident]").forEach((el) => {
@@ -633,7 +910,7 @@ function bindAdmin() {
     });
   });
 
-  app.querySelector("#admin-update")?.addEventListener("submit", (event) => {
+  app.querySelector("#admin-update")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const incident = state.store.incidents.find((item) => item.id === String(formData.get("incidentId")));
@@ -643,6 +920,27 @@ function bindAdmin() {
     const assignedTo = String(formData.get("assignedTo") || "").trim();
     const resolution = String(formData.get("resolution") || "").trim();
     const changedAt = new Date().toISOString();
+
+    if (state.adminToken) {
+      try {
+        const payload = await adminFetch(`/v1/admin/incidents/${encodeURIComponent(incident.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            status,
+            priority,
+            assignedTo: assignedTo || null,
+            resolution: resolution || null,
+            publicUpdate: resolution || `Status changed from ${incident.status} to ${status}.`,
+            publicVisible: true,
+          }),
+        });
+        upsertIncident(apiIncidentToLocal(payload.incident));
+        render();
+        return;
+      } catch (error) {
+        alert(error.message);
+      }
+    }
 
     if (status !== incident.status) incident.events.push(makeEvent(titleCase(status), `Status changed from ${incident.status} to ${status}.`, changedAt));
     if (resolution && resolution !== incident.resolution) incident.events.push(makeEvent("Resolution update", resolution, changedAt));

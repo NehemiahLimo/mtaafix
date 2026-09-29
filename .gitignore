@@ -5,6 +5,7 @@ infra/node_modules/
 
 # Build and generated output
 dist/
+web-dist/
 build/
 coverage/
 .nyc_output/
@@ -15,16 +16,21 @@ cdk.out/
 .env
 .env.*
 !.env.example
+.aws/
 *.pem
 *.key
 *.crt
 *.p12
 *.pfx
+*credentials*
+*secret*
 
 # AWS / CDK local state
 .aws-sam/
 samconfig.toml
 cdk.context.json
+docs/deployed-stack.md
+docs/deployed-stack*.md
 
 # Logs
 *.log

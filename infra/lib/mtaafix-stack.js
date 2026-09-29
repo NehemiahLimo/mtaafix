@@ -4,6 +4,8 @@ const cdk = require("aws-cdk-lib");
 const apigwv2 = require("aws-cdk-lib/aws-apigatewayv2");
 const authorizers = require("aws-cdk-lib/aws-apigatewayv2-authorizers");
 const integrations = require("aws-cdk-lib/aws-apigatewayv2-integrations");
+const cloudfront = require("aws-cdk-lib/aws-cloudfront");
+const origins = require("aws-cdk-lib/aws-cloudfront-origins");
 const cognito = require("aws-cdk-lib/aws-cognito");
 const dynamodb = require("aws-cdk-lib/aws-dynamodb");
 const lambda = require("aws-cdk-lib/aws-lambda");
@@ -65,6 +67,14 @@ class MtaaFixStack extends cdk.Stack {
           maxAge: 300,
         },
       ],
+    });
+
+    const websiteBucket = new s3.Bucket(this, "WebsiteBucket", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     const userPool = new cognito.UserPool(this, "AdminUserPool", {
@@ -148,10 +158,55 @@ class MtaaFixStack extends cdk.Stack {
     addRoute(api, "PATCH", "/v1/admin/incidents/{incidentId}", updateAdminIncident, adminAuthorizer);
     addRoute(api, "GET", "/v1/admin/incidents/{incidentId}/reports", listAdminReports, adminAuthorizer);
 
+    const websiteOriginAccessIdentity = new cloudfront.OriginAccessIdentity(this, "WebsiteOriginAccessIdentity");
+    websiteBucket.grantRead(websiteOriginAccessIdentity);
+
+    const apiDomainName = cdk.Fn.select(2, cdk.Fn.split("/", api.apiEndpoint));
+    const distribution = new cloudfront.Distribution(this, "WebDistribution", {
+      defaultRootObject: "index.html",
+      defaultBehavior: {
+        origin: new origins.S3Origin(websiteBucket, { originAccessIdentity: websiteOriginAccessIdentity }),
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        compress: true,
+      },
+      additionalBehaviors: {
+        "v1/*": {
+          origin: new origins.HttpOrigin(apiDomainName, {
+            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+          }),
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        },
+      },
+      errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: "/index.html",
+          ttl: cdk.Duration.minutes(1),
+        },
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: "/index.html",
+          ttl: cdk.Duration.minutes(1),
+        },
+      ],
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
+    });
+
     new cdk.CfnOutput(this, "ApiUrl", { value: api.apiEndpoint });
     new cdk.CfnOutput(this, "AdminUserPoolId", { value: userPool.userPoolId });
     new cdk.CfnOutput(this, "AdminUserPoolClientId", { value: userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, "PhotosBucketName", { value: photosBucket.bucketName });
+    new cdk.CfnOutput(this, "WebsiteBucketName", { value: websiteBucket.bucketName });
+    new cdk.CfnOutput(this, "CloudFrontDomainName", { value: distribution.distributionDomainName });
+    new cdk.CfnOutput(this, "CloudFrontUrl", { value: `https://${distribution.distributionDomainName}` });
   }
 
   apiFunction(id, handler, environment) {

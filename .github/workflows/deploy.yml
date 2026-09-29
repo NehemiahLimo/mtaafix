@@ -1,0 +1,92 @@
+name: Deploy MtaaFix
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: eu-west-1
+  STACK_NAME: MtaaFixStack
+
+jobs:
+  deploy:
+    name: Test and deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            api/package-lock.json
+            infra/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm --prefix api ci
+          npm --prefix infra ci
+
+      - name: Validate
+        run: |
+          npm run build
+          npm run api:check
+          npm run api:test
+          npm run infra:synth
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+
+      - name: Deploy infrastructure
+        run: npm --prefix infra run deploy -- --require-approval never
+
+      - name: Read stack outputs
+        id: stack
+        run: |
+          WEBSITE_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" \
+            --output text)
+          CLOUDFRONT_DOMAIN=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDomainName'].OutputValue" \
+            --output text)
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?DomainName=='$CLOUDFRONT_DOMAIN'].Id | [0]" \
+            --output text)
+
+          echo "website_bucket=$WEBSITE_BUCKET" >> "$GITHUB_OUTPUT"
+          echo "cloudfront_domain=$CLOUDFRONT_DOMAIN" >> "$GITHUB_OUTPUT"
+          echo "distribution_id=$DISTRIBUTION_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Upload frontend assets
+        run: |
+          aws s3 cp index.html "s3://${{ steps.stack.outputs.website_bucket }}/index.html" \
+            --content-type text/html \
+            --cache-control no-cache
+          aws s3 sync src "s3://${{ steps.stack.outputs.website_bucket }}/src" --delete
+          aws s3 sync public "s3://${{ steps.stack.outputs.website_bucket }}/public" --delete
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.stack.outputs.distribution_id }}" \
+            --paths "/*"
+
+      - name: Smoke test CloudFront
+        run: |
+          curl --fail --silent --show-error "https://${{ steps.stack.outputs.cloudfront_domain }}/" > /dev/null
+          curl --fail --silent --show-error "https://${{ steps.stack.outputs.cloudfront_domain }}/v1/incidents/public" > /dev/null

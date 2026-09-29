@@ -523,6 +523,15 @@ select:focus {
   font-weight: 850;
 }
 
+.upload-note {
+  margin: 0 0 12px;
+  border-radius: 8px;
+  background: #eff8f1;
+  color: #17633f;
+  padding: 10px 12px;
+  font-weight: 750;
+}
+
 .actions button:not(.primary) {
   min-height: 44px;
   padding: 10px 14px;

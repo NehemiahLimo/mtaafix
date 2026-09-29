@@ -633,8 +633,8 @@ function bindReport() {
     const description = String(formData.get("description") || "").trim();
     const location = String(formData.get("location") || "").trim();
     const contact = String(formData.get("contact") || "").trim();
-    const lat = Number(formData.get("lat") || state.reportLocation.lat);
-    const lng = Number(formData.get("lng") || state.reportLocation.lng);
+    const lat = Number(formData.get("lat") || form.querySelector("[data-lat-display]")?.textContent || state.reportLocation.lat);
+    const lng = Number(formData.get("lng") || form.querySelector("[data-lng-display]")?.textContent || state.reportLocation.lng);
     const file = formData.get("photo");
     if (file?.name) setSelectedPhoto(file);
     updateReportLocation(lat, lng, location || "Pinned issue location", "Pin selected for this report.");
@@ -685,20 +685,27 @@ function bindReport() {
 function initReportLocationPicker(form) {
   if (!form) return;
   const mapEl = form.querySelector("#report-location-map");
-  const latInput = form.querySelector('input[name="lat"]');
-  const lngInput = form.querySelector('input[name="lng"]');
   const locationInput = form.querySelector('input[name="location"]');
   const latDisplay = form.querySelector("[data-lat-display]");
   const lngDisplay = form.querySelector("[data-lng-display]");
   const statusEl = form.querySelector("#location-status");
 
-  if (latInput) latInput.value = String(state.reportLocation.lat);
-  if (lngInput) lngInput.value = String(state.reportLocation.lng);
+  const setCoordinateInputs = (lat, lng) => {
+    form.querySelectorAll('input[name="lat"]').forEach((input) => {
+      input.value = String(lat);
+      input.setAttribute("value", String(lat));
+    });
+    form.querySelectorAll('input[name="lng"]').forEach((input) => {
+      input.value = String(lng);
+      input.setAttribute("value", String(lng));
+    });
+  };
+
+  setCoordinateInputs(state.reportLocation.lat, state.reportLocation.lng);
 
   const syncLocation = (lat, lng, status) => {
     updateReportLocation(lat, lng, locationInput?.value || state.reportLocation.label, status);
-    if (latInput) latInput.value = String(lat);
-    if (lngInput) lngInput.value = String(lng);
+    setCoordinateInputs(lat, lng);
     if (latDisplay) latDisplay.textContent = lat.toFixed(5);
     if (lngDisplay) lngDisplay.textContent = lng.toFixed(5);
     if (statusEl) statusEl.textContent = status;

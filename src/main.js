@@ -692,6 +692,9 @@ function initReportLocationPicker(form) {
   const lngDisplay = form.querySelector("[data-lng-display]");
   const statusEl = form.querySelector("#location-status");
 
+  if (latInput) latInput.value = String(state.reportLocation.lat);
+  if (lngInput) lngInput.value = String(state.reportLocation.lng);
+
   const syncLocation = (lat, lng, status) => {
     updateReportLocation(lat, lng, locationInput?.value || state.reportLocation.label, status);
     if (latInput) latInput.value = String(lat);

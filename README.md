@@ -77,6 +77,7 @@ Target AWS MVP:
 See [docs/aws-architecture.md](docs/aws-architecture.md) for the full AWS solution architecture.
 See [docs/api-contracts.md](docs/api-contracts.md) for the first backend API contracts.
 See [docs/deployment.md](docs/deployment.md) for the AWS deployment runbook.
+See [docs/aws-agent-connection-proof.md](docs/aws-agent-connection-proof.md) for submission proof that the coding-agent workflow connects to AWS and deploys the live app.
 
 ## Next Increment
 

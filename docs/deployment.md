@@ -136,6 +136,8 @@ The browser report form uses this endpoint to PUT the selected image directly to
 
 The workflow at `.github/workflows/deploy.yml` runs checks, deploys CDK, uploads frontend assets to S3, invalidates CloudFront, and smoke-tests the deployed app.
 
+Submission proof for the coding-agent-to-AWS connection is documented in [aws-agent-connection-proof.md](aws-agent-connection-proof.md).
+
 Create a GitHub OIDC IAM role and save its ARN as the repository secret:
 
 ```text

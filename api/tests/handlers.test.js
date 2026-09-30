@@ -54,6 +54,35 @@ test("tracking handler returns public-safe incident and timeline", async () => {
   assert.equal("contactEmail" in body.incident, false);
 });
 
+test("tracking handler returns public-safe photo summaries", async () => {
+  resetStore();
+  await createReportHandler(event({
+    description: "Large pothole near the junction with a clear attached photo.",
+    location: { label: "Ngong Road, Nairobi", lat: -1.3001, lng: 36.7854 },
+    contact: { email: "resident@example.com", notify: true },
+    photoKey: "uploads/tmp/example.jpg",
+    triage: {
+      mode: "RULES",
+      category: "ROAD_DAMAGE",
+      summary: "Large pothole creating a traffic hazard near a road junction.",
+      priority: "HIGH",
+    },
+    duplicateDecision: { action: "ATTACH_TO_EXISTING", incidentId: "MTF-2026-00182" },
+  }));
+
+  const response = await getPublicIncidentHandler({
+    pathParameters: { incidentId: "MTF-2026-00182" },
+    requestContext: { requestId: "test" },
+  });
+  const body = JSON.parse(response.body);
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(body.photos.length, 1);
+  assert.equal(body.photos[0].hasPhoto, true);
+  assert.equal("photoKey" in body.photos[0], false);
+  assert.equal("contactEmail" in body.photos[0], false);
+});
+
 function event(body) {
   return {
     body: JSON.stringify(body),

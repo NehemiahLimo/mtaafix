@@ -23,6 +23,7 @@ export async function getPublicIncidentHandler(event) {
     return json(200, {
       incident,
       timeline: (await store.getEvents(incidentId, { publicOnly: true })).map(toPublicEvent),
+      photos: await publicPhotosForIncident(store, incidentId),
     });
   } catch (error) {
     return handleError(error, event?.requestContext?.requestId);
@@ -38,5 +39,40 @@ function toPublicEvent(event) {
     detail: event.detail,
     status: event.status,
     at: event.at,
+  };
+}
+
+async function publicPhotosForIncident(store, incidentId) {
+  const reports = await store.getReports(incidentId);
+  const photoReports = reports.filter((report) => report.photoKey);
+  if (!photoReports.length || !process.env.PHOTOS_BUCKET) {
+    return photoReports.map((report) => publicPhotoSummary(report));
+  }
+
+  const { GetObjectCommand, S3Client } = await import("@aws-sdk/client-s3");
+  const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+  const client = new S3Client({});
+
+  return Promise.all(
+    photoReports.map(async (report) => ({
+      ...publicPhotoSummary(report),
+      viewUrl: await getSignedUrl(
+        client,
+        new GetObjectCommand({
+          Bucket: process.env.PHOTOS_BUCKET,
+          Key: report.photoKey,
+        }),
+        { expiresIn: 900 },
+      ),
+    })),
+  );
+}
+
+function publicPhotoSummary(report) {
+  return {
+    reportId: report.reportId,
+    hasPhoto: true,
+    createdAt: report.createdAt,
+    location: report.location,
   };
 }

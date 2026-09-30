@@ -35,8 +35,10 @@ let state = {
     status: "Drop the pin on the issue location or use your current position.",
   },
   adminReportsByIncident: {},
+  trackingPhotosByIncident: {},
   adminLoadingIncidentId: "",
   adminFilters: {
+    query: "",
     status: "ALL",
     priority: "ALL",
     category: "ALL",
@@ -47,6 +49,8 @@ let state = {
 
 const app = document.querySelector("#app");
 if (!app) throw new Error("App root not found");
+
+let adminFilterRenderTimer = 0;
 
 init();
 
@@ -203,6 +207,7 @@ async function loadTrackingIncident(incidentId) {
     const payload = await apiFetch(`/v1/tracking/${encodeURIComponent(incidentId)}`);
     const incident = apiIncidentToLocal(payload.incident, payload.timeline || []);
     upsertIncident(incident);
+    state.trackingPhotosByIncident[incident.id] = payload.photos || [];
     state.apiOnline = true;
     return incident;
   } catch (error) {
@@ -309,17 +314,57 @@ async function withAdminPhotoUrl(report) {
 }
 
 function filteredAdminIncidents() {
+  const query = state.adminFilters.query.trim().toLowerCase();
   return state.store.incidents.filter((incident) => {
     if (state.adminFilters.status !== "ALL" && incident.status !== state.adminFilters.status) return false;
     if (state.adminFilters.priority !== "ALL" && incident.priority !== state.adminFilters.priority) return false;
     if (state.adminFilters.category !== "ALL" && incident.category !== state.adminFilters.category) return false;
+    if (query) {
+      const haystack = [incident.id, incident.summary, incident.location, incident.category, incident.status, incident.priority, incident.assignedTo]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
     return true;
-  });
+  }).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
 }
 
 function selectedAdminReport() {
   const reports = state.adminReportsByIncident[state.selectedIncidentId] || [];
   return reports.find((report) => (report.reportId || report.id) === state.selectedAdminReportId) || null;
+}
+
+function adminUserProfile() {
+  const payload = decodeJwtPayload(state.adminToken);
+  const email = payload.email || payload["cognito:username"] || "admin@mtaafix";
+  const name = payload.name || payload.given_name || email.split("@")[0] || "Admin user";
+  const initials = name
+    .split(/[.\s_-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "AU";
+  return { name, email, initials };
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const [, payload] = String(token || "").split(".");
+    if (!payload) return {};
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
+    return JSON.parse(json);
+  } catch (error) {
+    return {};
+  }
+}
+
+function unresolvedAgeDays(incident) {
+  if (incident.status === "RESOLVED") return 0;
+  const created = new Date(incident.createdAt).getTime();
+  if (!Number.isFinite(created)) return 0;
+  return Math.max(0, Math.floor((Date.now() - created) / 86400000));
 }
 
 function makeEvent(label, detail, at = new Date().toISOString()) {
@@ -963,8 +1008,9 @@ function successView() {
 }
 
 function bindSuccess() {
-  app.querySelector("#track-success")?.addEventListener("click", () => {
+  app.querySelector("#track-success")?.addEventListener("click", async () => {
     state.selectedIncidentId = state.successIncidentId;
+    await loadTrackingIncident(state.successIncidentId);
     state.view = "track";
     render();
   });
@@ -1144,19 +1190,26 @@ function adminView() {
   const incidents = filteredAdminIncidents();
   const selected = state.store.incidents.find((incident) => incident.id === state.selectedIncidentId) || incidents[0] || state.store.incidents[0];
   const activeReport = selectedAdminReport();
+  const adminUser = adminUserProfile();
   return `
     <section class="admin-shell">
       <aside class="panel admin-sidebar">
-        <div class="admin-topline">
-          <div class="section-title"><span>Queue</span><strong>${incidents.length} incidents</strong></div>
-          <button class="light-button admin-logout" id="admin-logout" type="button">Sign out</button>
+        <div class="admin-profile">
+          <div class="profile-avatar">${escapeHtml(adminUser.initials)}</div>
+          <div>
+            <strong>${escapeHtml(adminUser.name)}</strong>
+            <small>${escapeHtml(adminUser.email)}</small>
+          </div>
+          <button class="light-button admin-logout" id="admin-logout" type="button">Logout</button>
         </div>
+        <div class="section-title admin-queue-title"><span>Queue</span><strong>${incidents.length} incidents</strong></div>
         <div class="stat-row">
           ${metric("Open", String(state.store.incidents.filter((i) => i.status !== "RESOLVED").length))}
           ${metric("High", String(state.store.incidents.filter((i) => i.priority === "HIGH").length))}
+          ${metric("Aging", String(state.store.incidents.filter((i) => unresolvedAgeDays(i) >= 7).length))}
         </div>
         ${adminFiltersView()}
-        <div class="incident-list">${incidents.length ? incidents.map((incident) => incidentCard(incident, true)).join("") : `<p class="empty">No incidents match these filters.</p>`}</div>
+        ${adminIncidentQueue(incidents)}
       </aside>
       <section class="admin-detail">${selected ? incidentDetail(selected, true) : `<p class="empty">Select an incident.</p>`}</section>
     </section>
@@ -1168,6 +1221,9 @@ function adminFiltersView() {
   const categoryOptions = [["ALL", "All categories"], ...reportCategories.map(([value, label]) => [value, label])];
   return `
     <form id="admin-filters" class="admin-filters">
+      <label class="admin-search">Search
+        <input name="query" value="${escapeHtml(state.adminFilters.query)}" placeholder="Search ID, location, summary..." />
+      </label>
       <label>Status
         <select name="status">
           ${["ALL", ...statusOrder].map((status) => `<option value="${status}" ${state.adminFilters.status === status ? "selected" : ""}>${status === "ALL" ? "All statuses" : titleCase(status)}</option>`).join("")}
@@ -1203,6 +1259,7 @@ function bindAdmin() {
       status: String(formData.get("status") || "ALL"),
       priority: String(formData.get("priority") || "ALL"),
       category: String(formData.get("category") || "ALL"),
+      query: String(formData.get("query") || ""),
     };
     const incidents = filteredAdminIncidents();
     if (!incidents.some((incident) => incident.id === state.selectedIncidentId)) {
@@ -1210,6 +1267,25 @@ function bindAdmin() {
     }
     state.selectedAdminReportId = "";
     render();
+  });
+
+  app.querySelector("#admin-filters")?.addEventListener("input", (event) => {
+    const formData = new FormData(event.currentTarget);
+    state.adminFilters = {
+      status: String(formData.get("status") || "ALL"),
+      priority: String(formData.get("priority") || "ALL"),
+      category: String(formData.get("category") || "ALL"),
+      query: String(formData.get("query") || ""),
+    };
+    window.clearTimeout(adminFilterRenderTimer);
+    adminFilterRenderTimer = window.setTimeout(() => {
+      const incidents = filteredAdminIncidents();
+      if (!incidents.some((incident) => incident.id === state.selectedIncidentId)) {
+        state.selectedIncidentId = incidents[0]?.id || "";
+      }
+      state.selectedAdminReportId = "";
+      render();
+    }, 220);
   });
 
   app.querySelectorAll("[data-open-report]").forEach((el) => {
@@ -1317,11 +1393,64 @@ function incidentCard(incident, admin) {
   `;
 }
 
+function adminIncidentQueue(incidents) {
+  if (!incidents.length) return `<p class="empty">No incidents match these filters.</p>`;
+  return `
+    <div class="admin-table-wrap" role="region" aria-label="Incident queue">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Incident</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Age</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${incidents.map(adminIncidentRow).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function adminIncidentRow(incident) {
+  const isSelected = incident.id === state.selectedIncidentId;
+  return `
+    <tr class="${isSelected ? "selected" : ""}">
+      <td>
+        <button type="button" class="table-incident-button" data-select-incident="${escapeHtml(incident.id)}">
+          <strong>${escapeHtml(incident.id)}</strong>
+          <span>${escapeHtml(incident.summary)}</span>
+          <small>${escapeHtml(incident.location)}</small>
+        </button>
+      </td>
+      <td><span class="badge ${incident.status.toLowerCase()}">${titleCase(incident.status)}</span></td>
+      <td><span class="badge ${incident.priority.toLowerCase()}">${incident.priority}</span></td>
+      <td>${adminAgeBadge(incident)}</td>
+    </tr>
+  `;
+}
+
+function adminAgeBadge(incident) {
+  if (incident.status === "RESOLVED") return `<span class="age-badge resolved">Closed</span>`;
+  const days = unresolvedAgeDays(incident);
+  if (days >= 14) return `<span class="age-badge overdue">${days}d overdue</span>`;
+  if (days >= 7) return `<span class="age-badge aging">${days}d aging</span>`;
+  return `<span class="age-badge fresh">${days}d open</span>`;
+}
+
 function trackingSummary(incident) {
+  const photos = state.trackingPhotosByIncident[incident.id] || [];
+  const primaryPhoto = photos.find((photo) => photo.viewUrl);
   return `
     <article class="panel tracking-card">
       <div class="tracking-hero">
-        <div class="mini-photo"></div>
+        ${
+          primaryPhoto
+            ? `<img class="mini-photo" src="${escapeHtml(primaryPhoto.viewUrl)}" alt="Attached issue photo for ${escapeHtml(incident.id)}" />`
+            : `<div class="mini-photo empty-photo">No photo yet</div>`
+        }
         <div>
           <span class="eyebrow">Incident Details</span>
           <h1>${incident.id}</h1>
@@ -1337,8 +1466,24 @@ function trackingSummary(incident) {
         ${fact("◷", "Reported", formatDate(incident.createdAt))}
         ${fact("♙", "Assigned", incident.assignedTo || "Pending")}
       </div>
+      ${trackingPhotosView(incident, photos)}
       <button class="light-button track-map-button" data-view="map">View on Map</button>
     </article>
+  `;
+}
+
+function trackingPhotosView(incident, photos) {
+  const viewablePhotos = photos.filter((photo) => photo.viewUrl);
+  if (!viewablePhotos.length) return "";
+  return `
+    <div class="tracking-photos" aria-label="Attached issue photos">
+      ${viewablePhotos.slice(0, 4).map((photo, index) => `
+        <figure>
+          <img src="${escapeHtml(photo.viewUrl)}" alt="Submitted issue photo ${index + 1} for ${escapeHtml(incident.id)}" />
+          <figcaption>${formatDate(photo.createdAt)}</figcaption>
+        </figure>
+      `).join("")}
+    </div>
   `;
 }
 
@@ -1453,7 +1598,7 @@ function adminReportCard(report) {
   const contact = report.contactEmail || report.contactPhone || report.contact || "No contact provided";
   return `
     <article class="report-card">
-      ${report.photoUrl ? `<img class="report-photo" src="${report.photoUrl}" alt="Attached issue photo for ${escapeHtml(reportId)}" />` : `<div class="report-photo empty-photo">No photo</div>`}
+      ${report.photoUrl ? `<img class="report-photo" src="${escapeHtml(report.photoUrl)}" alt="Attached issue photo for ${escapeHtml(reportId)}" />` : `<div class="report-photo empty-photo">No photo</div>`}
       <div class="report-copy">
         <div class="report-head">
           <strong>${escapeHtml(reportId)}</strong>
@@ -1480,7 +1625,7 @@ function reportModal(report) {
       <article class="panel report-modal">
         <button class="modal-close" type="button" data-close-report aria-label="Close report details">×</button>
         <div class="report-modal-media">
-          ${report.photoUrl ? `<img src="${report.photoUrl}" alt="Attached issue photo for ${escapeHtml(reportId)}" />` : `<div class="empty-photo">No photo attached</div>`}
+          ${report.photoUrl ? `<img src="${escapeHtml(report.photoUrl)}" alt="Attached issue photo for ${escapeHtml(reportId)}" />` : `<div class="empty-photo">No photo attached</div>`}
         </div>
         <div class="report-modal-body">
           <span class="eyebrow">Citizen report</span>

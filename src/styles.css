@@ -277,6 +277,7 @@ main {
 }
 
 .workspace,
+.admin-page,
 .admin-shell {
   width: min(1180px, 100%);
   margin: 0 auto;
@@ -308,6 +309,160 @@ main {
   grid-template-columns: 370px minmax(0, 1fr);
 }
 
+.admin-page {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-dashboard {
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.admin-dashboard-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, auto);
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.admin-dashboard-head h1 {
+  margin: 4px 0 8px;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+}
+
+.admin-dashboard-head p {
+  max-width: 660px;
+  color: #53615b;
+  line-height: 1.6;
+}
+
+.admin-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.admin-kpi {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(23, 35, 31, 0.09);
+  border-radius: 8px;
+  background: #f7faf8;
+  padding: 13px;
+}
+
+.admin-kpi span,
+.admin-kpi small {
+  color: #66736e;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.admin-kpi strong {
+  color: #17231f;
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  line-height: 1;
+}
+
+.admin-insights-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(360px, 1.2fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.admin-breakdown,
+.admin-map-card {
+  border: 1px solid rgba(23, 35, 31, 0.09);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+}
+
+.admin-breakdown .section-title,
+.admin-map-card .section-title {
+  margin-bottom: 12px;
+}
+
+.admin-breakdown .section-title strong,
+.admin-map-card .section-title strong {
+  font-size: 1.05rem;
+}
+
+.breakdown-list {
+  display: grid;
+  gap: 10px;
+}
+
+.breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.9fr) minmax(90px, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.breakdown-row span {
+  overflow: hidden;
+  color: #394640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdown-row strong {
+  min-width: 20px;
+  text-align: right;
+}
+
+.breakdown-bar {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7edf0;
+}
+
+.breakdown-bar b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #00984f;
+}
+
+.breakdown-bar .reported,
+.breakdown-bar .road_damage {
+  background: #1d73e8;
+}
+
+.breakdown-bar .verified,
+.breakdown-bar .assigned,
+.breakdown-bar .in_progress,
+.breakdown-bar .streetlight,
+.breakdown-bar .drainage {
+  background: #f7b500;
+}
+
+.breakdown-bar .resolved,
+.breakdown-bar .waste,
+.breakdown-bar .public_infrastructure {
+  background: #00984f;
+}
+
+.breakdown-bar .water_leak,
+.breakdown-bar .other {
+  background: #7c3aed;
+}
+
+.admin-map {
+  min-height: 310px;
+  overflow: hidden;
+  border: 1px solid rgba(23, 35, 31, 0.1);
+  border-radius: 8px;
+  background: #dfe8e4;
+}
+
 .admin-topline {
   display: flex;
   align-items: start;
@@ -320,7 +475,6 @@ main {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
-  margin-bottom: 18px;
   border: 1px solid rgba(23, 35, 31, 0.1);
   border-radius: 8px;
   background: #f7faf8;
@@ -1837,6 +1991,8 @@ h2 {
   .report-layout,
   .map-layout,
   .admin-shell,
+  .admin-dashboard-head,
+  .admin-insights-grid,
   .about-grid,
   .track-content,
   .two,
@@ -1867,6 +2023,14 @@ h2 {
 
   .admin-table-wrap {
     max-height: none;
+  }
+
+  .admin-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-map {
+    min-height: 360px;
   }
 
   .tracking-photos {
@@ -2023,6 +2187,14 @@ h2 {
   .admin-profile,
   .admin-filters {
     grid-template-columns: 1fr;
+  }
+
+  .admin-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .breakdown-row {
+    grid-template-columns: minmax(0, 1fr) minmax(80px, 1fr) auto;
   }
 
   .admin-logout {

@@ -417,6 +417,7 @@ function render() {
   if (state.view === "report") bindReport();
   if (state.view === "track") bindTrack();
   if (state.view === "admin") bindAdmin();
+  if (state.view === "admin" && state.adminAuthed) initAdminMap();
   if (state.view === "home") bindHome();
   if (state.view === "success") bindSuccess();
   if (state.view === "map") initLeafletMap();
@@ -1139,6 +1140,60 @@ function initLeafletMap() {
   window.setTimeout(() => map.invalidateSize(), 0);
 }
 
+function initAdminMap() {
+  const mapEl = document.querySelector("#admin-map");
+  if (!mapEl || typeof window.L === "undefined") {
+    mapEl?.classList.add("map-unavailable");
+    if (mapEl) mapEl.innerHTML = "<p>Map is loading. Please refresh if it does not appear.</p>";
+    return;
+  }
+
+  const incidents = state.store.incidents
+    .filter((incident) => Number.isFinite(incident.lat) && Number.isFinite(incident.lng))
+    .filter(isNairobiCoordinate);
+  const center = incidents.length ? [incidents[0].lat, incidents[0].lng] : [-1.2864, 36.8219];
+  const map = window.L.map(mapEl, {
+    center,
+    zoom: 12,
+    scrollWheelZoom: false,
+  });
+
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+
+  const markers = incidents.map((incident) => {
+    const marker = window.L.marker([incident.lat, incident.lng], { icon: incidentMarkerIcon(incident) }).addTo(map);
+    marker.bindPopup(mapPopupContent(incident), { maxWidth: 280 });
+    marker.on("click", () => {
+      state.selectedIncidentId = incident.id;
+    });
+    return marker;
+  });
+
+  if (markers.length > 1) {
+    const group = window.L.featureGroup(markers);
+    map.fitBounds(group.getBounds().pad(0.2), { maxZoom: 13 });
+  }
+
+  mapEl.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-map-track]");
+    if (!button) return;
+    state.selectedIncidentId = button.dataset.mapTrack;
+    state.selectedAdminReportId = "";
+    render();
+    try {
+      await loadAdminIncidentDetails(state.selectedIncidentId);
+    } catch (error) {
+      console.warn(error);
+    }
+    render();
+  });
+
+  window.setTimeout(() => map.invalidateSize(), 0);
+}
+
 function isNairobiCoordinate(incident) {
   return incident.lat >= -1.55 && incident.lat <= -1.05 && incident.lng >= 36.55 && incident.lng <= 37.1;
 }
@@ -1192,28 +1247,104 @@ function adminView() {
   const activeReport = selectedAdminReport();
   const adminUser = adminUserProfile();
   return `
-    <section class="admin-shell">
-      <aside class="panel admin-sidebar">
-        <div class="admin-profile">
-          <div class="profile-avatar">${escapeHtml(adminUser.initials)}</div>
+    <section class="admin-page">
+      <div class="panel admin-dashboard">
+        <div class="admin-dashboard-head">
           <div>
-            <strong>${escapeHtml(adminUser.name)}</strong>
-            <small>${escapeHtml(adminUser.email)}</small>
+            <span class="eyebrow">Authority operations</span>
+            <h1>Admin Dashboard</h1>
+            <p>Monitor reported cases, map public submissions, and prioritize the oldest unresolved issues.</p>
           </div>
-          <button class="light-button admin-logout" id="admin-logout" type="button">Logout</button>
+          <div class="admin-profile">
+            <div class="profile-avatar">${escapeHtml(adminUser.initials)}</div>
+            <div>
+              <strong>${escapeHtml(adminUser.name)}</strong>
+              <small>${escapeHtml(adminUser.email)}</small>
+            </div>
+            <button class="light-button admin-logout" id="admin-logout" type="button">Logout</button>
+          </div>
         </div>
-        <div class="section-title admin-queue-title"><span>Queue</span><strong>${incidents.length} incidents</strong></div>
-        <div class="stat-row">
-          ${metric("Open", String(state.store.incidents.filter((i) => i.status !== "RESOLVED").length))}
-          ${metric("High", String(state.store.incidents.filter((i) => i.priority === "HIGH").length))}
-          ${metric("Aging", String(state.store.incidents.filter((i) => unresolvedAgeDays(i) >= 7).length))}
+        ${adminDashboardSummary()}
+        <div class="admin-insights-grid">
+          ${adminBreakdownPanel("Cases by status", adminStatusBreakdown())}
+          ${adminBreakdownPanel("Cases by category", adminCategoryBreakdown())}
+          <div class="admin-map-card">
+            <div class="section-title"><span>Public report map</span><strong>Mapped cases</strong></div>
+            <div id="admin-map" class="admin-map" aria-label="Admin map of public reports"></div>
+          </div>
         </div>
-        ${adminFiltersView()}
-        ${adminIncidentQueue(incidents)}
-      </aside>
-      <section class="admin-detail">${selected ? incidentDetail(selected, true) : `<p class="empty">Select an incident.</p>`}</section>
+      </div>
+      <section class="admin-shell">
+        <aside class="panel admin-sidebar">
+          <div class="section-title admin-queue-title"><span>Queue</span><strong>${incidents.length} incidents</strong></div>
+          ${adminFiltersView()}
+          ${adminIncidentQueue(incidents)}
+        </aside>
+        <section class="admin-detail">${selected ? incidentDetail(selected, true) : `<p class="empty">Select an incident.</p>`}</section>
+      </section>
     </section>
     ${activeReport ? reportModal(activeReport) : ""}
+  `;
+}
+
+function adminDashboardSummary() {
+  const incidents = state.store.incidents;
+  const open = incidents.filter((incident) => incident.status !== "RESOLVED").length;
+  const high = incidents.filter((incident) => incident.priority === "HIGH").length;
+  const aging = incidents.filter((incident) => unresolvedAgeDays(incident) >= 7).length;
+  const reports = incidents.reduce((sum, incident) => sum + incident.reportIds.length, 0);
+  return `
+    <div class="admin-kpis">
+      ${adminKpi("Total cases", String(incidents.length), "All public incidents")}
+      ${adminKpi("Open cases", String(open), "Awaiting completion")}
+      ${adminKpi("High priority", String(high), "Needs urgent attention")}
+      ${adminKpi("Aging cases", String(aging), "Open for 7+ days")}
+      ${adminKpi("Public reports", String(reports), "Submissions received")}
+    </div>
+  `;
+}
+
+function adminKpi(label, value, hint) {
+  return `
+    <div class="admin-kpi">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      <small>${escapeHtml(hint)}</small>
+    </div>
+  `;
+}
+
+function adminStatusBreakdown() {
+  return statusOrder.map((status) => ({
+    label: titleCase(status),
+    value: state.store.incidents.filter((incident) => incident.status === status).length,
+    className: status.toLowerCase(),
+  }));
+}
+
+function adminCategoryBreakdown() {
+  return reportCategories.map(([value, label]) => ({
+    label,
+    value: state.store.incidents.filter((incident) => incident.category === value).length,
+    className: value.toLowerCase(),
+  })).filter((item) => item.value > 0);
+}
+
+function adminBreakdownPanel(title, items) {
+  const max = Math.max(...items.map((item) => item.value), 1);
+  return `
+    <div class="admin-breakdown">
+      <div class="section-title"><span>Distribution</span><strong>${escapeHtml(title)}</strong></div>
+      <div class="breakdown-list">
+        ${items.map((item) => `
+          <div class="breakdown-row">
+            <span>${escapeHtml(item.label)}</span>
+            <div class="breakdown-bar"><b class="${escapeHtml(item.className)}" style="width: ${Math.max(8, Math.round((item.value / max) * 100))}%"></b></div>
+            <strong>${item.value}</strong>
+          </div>
+        `).join("")}
+      </div>
+    </div>
   `;
 }
 

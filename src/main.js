@@ -316,7 +316,9 @@ async function withAdminPhotoUrl(report) {
 function filteredAdminIncidents() {
   const query = state.adminFilters.query.trim().toLowerCase();
   return state.store.incidents.filter((incident) => {
-    if (state.adminFilters.status !== "ALL" && incident.status !== state.adminFilters.status) return false;
+    if (state.adminFilters.status === "OPEN" && incident.status !== "REPORTED") return false;
+    if (state.adminFilters.status === "ACTIVE" && !["ASSIGNED", "IN_PROGRESS"].includes(incident.status)) return false;
+    if (!["ALL", "OPEN", "ACTIVE"].includes(state.adminFilters.status) && incident.status !== state.adminFilters.status) return false;
     if (state.adminFilters.priority !== "ALL" && incident.priority !== state.adminFilters.priority) return false;
     if (state.adminFilters.category !== "ALL" && incident.category !== state.adminFilters.category) return false;
     if (query) {
@@ -387,6 +389,8 @@ function setSelectedPhoto(file) {
 }
 
 function render() {
+  const routeView = new URLSearchParams(window.location.search).get("view");
+  if (routeView === "admin" && state.view !== "admin") state.view = "admin";
   const adminConsole = state.view === "admin" && state.adminAuthed;
   app.innerHTML = `
     ${adminConsole ? "" : `<header class="topbar">
@@ -459,6 +463,11 @@ function bindNavigation() {
     el.addEventListener("click", (event) => {
       event.preventDefault();
       state.view = el.dataset.view;
+      if (state.view === "admin") {
+        history.replaceState(null, "", "?view=admin");
+      } else {
+        history.replaceState(null, "", window.location.pathname);
+      }
       state.lastTriage = null;
       state.lastDuplicate = null;
       render();
@@ -1181,15 +1190,7 @@ function initAdminMap() {
   mapEl.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-map-track]");
     if (!button) return;
-    state.selectedIncidentId = button.dataset.mapTrack;
-    state.selectedAdminReportId = "";
-    render();
-    try {
-      await loadAdminIncidentDetails(state.selectedIncidentId);
-    } catch (error) {
-      console.warn(error);
-    }
-    render();
+    await selectAdminIncident(button.dataset.mapTrack, { scrollToDetail: true });
   });
 
   window.setTimeout(() => map.invalidateSize(), 0);
@@ -1254,14 +1255,12 @@ function adminView() {
           <img src="/public/mtaafix-logo-web.png" alt="MtaaFix" />
         </a>
         <div class="admin-nav-links" aria-label="Admin navigation">
-          ${adminNavItem("Dashboard", "dashboard", true)}
-          ${adminNavItem("Incidents", "incidents")}
-          ${adminNavItem("Reports", "reports")}
-          ${adminNavItem("Map", "map")}
-          ${adminNavItem("Analytics", "analytics")}
-          ${adminNavItem("Users", "users")}
-          ${adminNavItem("Teams", "teams")}
-          ${adminNavItem("Settings", "settings")}
+          ${adminNavItem("Dashboard", "dashboard", "dashboard", true)}
+          ${adminNavItem("Incidents", "incidents", "incidents")}
+          ${adminNavItem("Reports", "reports", "incidents")}
+          ${adminNavItem("Map", "map", "map")}
+          ${adminNavItem("Analytics", "analytics", "analytics")}
+          <button type="button" data-view="home"><span>↗</span>Homepage</button>
         </div>
         <div class="admin-user-card">
           <div class="profile-avatar">${escapeHtml(adminUser.initials)}</div>
@@ -1280,13 +1279,20 @@ function adminView() {
             <kbd>⌘ K</kbd>
           </label>
           <div class="admin-toolbar-actions">
-            <button class="admin-select" type="button">⌖ Nairobi County⌄</button>
-            <button class="admin-select" type="button">□ Last 30 days⌄</button>
-            <button class="admin-icon-button" type="button" aria-label="Notifications">♢<span>5</span></button>
+            <button class="admin-select" type="button" data-admin-jump="map">⌖ Nairobi County⌄</button>
+            <button class="admin-select" type="button" data-admin-jump="analytics">□ Last 30 days⌄</button>
+            <button class="admin-icon-button" type="button" data-admin-jump="incidents" aria-label="Notifications">♢<span>5</span></button>
             <div class="profile-avatar">${escapeHtml(adminUser.initials)}</div>
           </div>
         </div>
         <div class="admin-main">
+          <nav class="admin-breadcrumbs" aria-label="Breadcrumb">
+            <button type="button" data-view="home">Home</button>
+            <span>/</span>
+            <button type="button" data-admin-jump="dashboard">Admin</button>
+            <span>/</span>
+            <strong>Dashboard</strong>
+          </nav>
           <div class="admin-title-row">
             <div>
               <h1>Dashboard</h1>
@@ -1294,15 +1300,15 @@ function adminView() {
             </div>
             <button class="admin-add-button" type="button" data-view="report"><span>+</span> Add Incident <b>⌄</b></button>
           </div>
-          ${adminDashboardSummary()}
-          <div class="admin-grid-row">
+          <div data-admin-section="dashboard">${adminDashboardSummary()}</div>
+          <div class="admin-grid-row" data-admin-section="analytics">
             ${adminCategoryDonut()}
             ${adminTrendPanel()}
             ${adminActivityPanel()}
           </div>
           <div class="admin-lower-grid">
             ${adminIncidentQueue(incidents)}
-            <div class="admin-map-card">
+            <div class="admin-map-card" data-admin-section="map">
               <div class="admin-panel-head">
                 <h2>Incident Map</h2>
                 <button class="light-button" type="button" data-view="map">View Full Map</button>
@@ -1316,7 +1322,7 @@ function adminView() {
               </div>
             </div>
           </div>
-          <div class="admin-detail-drawer">${selected ? incidentDetail(selected, true) : `<p class="empty">Select an incident.</p>`}</div>
+          <div class="admin-detail-drawer" data-admin-section="incident-detail">${selected ? incidentDetail(selected, true) : `<p class="empty">Select an incident.</p>`}</div>
         </div>
       </div>
     </section>
@@ -1324,7 +1330,7 @@ function adminView() {
   `;
 }
 
-function adminNavItem(label, icon, active = false) {
+function adminNavItem(label, icon, target, active = false) {
   const icons = {
     dashboard: "▣",
     incidents: "⌂",
@@ -1335,7 +1341,7 @@ function adminNavItem(label, icon, active = false) {
     teams: "☷",
     settings: "⚙",
   };
-  return `<button class="${active ? "active" : ""}" type="button"><span>${icons[icon] || "•"}</span>${escapeHtml(label)}</button>`;
+  return `<button class="${active ? "active" : ""}" type="button" data-admin-jump="${escapeHtml(target)}"><span>${icons[icon] || "•"}</span>${escapeHtml(label)}</button>`;
 }
 
 function adminDashboardSummary() {
@@ -1416,6 +1422,7 @@ function adminCategoryDonut() {
 }
 
 function adminTrendPanel() {
+  const trend = adminTrendData();
   return `
     <div class="admin-chart-card admin-trend-card">
       <div class="admin-panel-head">
@@ -1433,16 +1440,55 @@ function adminTrendPanel() {
           <path d="M50 20 V220 M160 20 V220 M270 20 V220 M380 20 V220 M490 20 V220 M620 20 V220" />
         </g>
         <g class="trend-axis">
-          <text x="20" y="224">0</text><text x="20" y="174">20</text><text x="20" y="124">40</text><text x="20" y="74">60</text><text x="20" y="24">80</text>
-          <text x="50" y="246">Sep 1</text><text x="160" y="246">Sep 7</text><text x="270" y="246">Sep 14</text><text x="490" y="246">Sep 21</text><text x="600" y="246">Sep 30</text>
+          ${trend.axisLabels.map((label) => `<text x="${label.x}" y="${label.y}">${escapeHtml(label.text)}</text>`).join("")}
         </g>
-        <path class="trend-fill resolved" d="M50 205 C90 185 105 190 130 175 S190 165 230 170 S285 155 320 168 S390 185 435 172 S520 165 620 132 L620 220 L50 220 Z" />
-        <path class="trend-line reported" d="M50 150 C82 118 100 116 130 100 S180 118 215 103 S270 128 320 105 S380 118 420 88 S500 120 545 78 S590 80 620 58" />
-        <path class="trend-line progress" d="M50 178 C88 155 118 145 155 148 S230 150 270 140 S335 155 382 125 S458 165 520 118 S575 130 620 120" />
-        <path class="trend-line resolved" d="M50 205 C90 185 105 190 130 175 S190 165 230 170 S285 155 320 168 S390 185 435 172 S520 165 620 132" />
+        <path class="trend-fill resolved" d="${trend.fillPath}" />
+        <path class="trend-line reported" d="${trend.reportedPath}" />
+        <path class="trend-line progress" d="${trend.progressPath}" />
+        <path class="trend-line resolved" d="${trend.resolvedPath}" />
       </svg>
     </div>
   `;
+}
+
+function adminTrendData() {
+  const days = Array.from({ length: 30 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (29 - index));
+    return date;
+  });
+  const counts = days.map((day) => {
+    const end = new Date(day);
+    end.setHours(23, 59, 59, 999);
+    const created = state.store.incidents.filter((incident) => new Date(incident.createdAt).getTime() <= end.getTime());
+    return {
+      reported: created.length,
+      progress: created.filter((incident) => ["ASSIGNED", "IN_PROGRESS"].includes(incident.status)).length,
+      resolved: created.filter((incident) => incident.status === "RESOLVED").length,
+    };
+  });
+  const max = Math.max(1, ...counts.flatMap((item) => [item.reported, item.progress, item.resolved]));
+  const xFor = (index) => 50 + (index / 29) * 570;
+  const yFor = (value) => 220 - (value / max) * 200;
+  const points = (key) => counts.map((item, index) => [xFor(index), yFor(item[key])]);
+  const path = (items) => items.map(([x, y], index) => `${index ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const resolvedPoints = points("resolved");
+  const axisLabels = [
+    { x: 20, y: 224, text: "0" },
+    { x: 18, y: 174, text: String(Math.round(max * 0.25)) },
+    { x: 18, y: 124, text: String(Math.round(max * 0.5)) },
+    { x: 18, y: 74, text: String(Math.round(max * 0.75)) },
+    { x: 18, y: 24, text: String(max) },
+    ...[0, 7, 14, 21, 29].map((index) => ({ x: xFor(index) - 8, y: 246, text: days[index].toLocaleDateString("en-KE", { month: "short", day: "numeric" }) })),
+  ];
+  return {
+    axisLabels,
+    reportedPath: path(points("reported")),
+    progressPath: path(points("progress")),
+    resolvedPath: path(resolvedPoints),
+    fillPath: `${path(resolvedPoints)} L620 220 L50 220 Z`,
+  };
 }
 
 function adminActivityPanel() {
@@ -1476,7 +1522,14 @@ function adminFiltersView() {
       </label>
       <label>Status
         <select name="status">
-          ${["ALL", ...statusOrder].map((status) => `<option value="${status}" ${state.adminFilters.status === status ? "selected" : ""}>${status === "ALL" ? "All statuses" : titleCase(status)}</option>`).join("")}
+          ${[
+            ["ALL", "All statuses"],
+            ["OPEN", "Open"],
+            ["ACTIVE", "In Progress"],
+            ["RESOLVED", "Resolved"],
+            ["VERIFIED", "Verified"],
+            ["ASSIGNED", "Assigned"],
+          ].map(([status, label]) => `<option value="${status}" ${state.adminFilters.status === status ? "selected" : ""}>${label}</option>`).join("")}
         </select>
       </label>
       <label>Priority
@@ -1516,6 +1569,23 @@ function bindAdmin() {
     }, 220);
   });
 
+  app.querySelectorAll("[data-admin-jump]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const section = app.querySelector(`[data-admin-section="${el.dataset.adminJump}"]`);
+      section?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  app.querySelectorAll("[data-admin-status-filter]").forEach((el) => {
+    el.addEventListener("click", () => {
+      state.adminFilters.status = el.dataset.adminStatusFilter || "ALL";
+      const incidents = filteredAdminIncidents();
+      state.selectedIncidentId = incidents[0]?.id || "";
+      state.selectedAdminReportId = "";
+      render();
+    });
+  });
+
   app.querySelector("#admin-filters")?.addEventListener("change", (event) => {
     const formData = new FormData(event.currentTarget);
     state.adminFilters = {
@@ -1549,6 +1619,14 @@ function bindAdmin() {
       state.selectedAdminReportId = "";
       render();
     }, 220);
+  });
+
+  app.querySelector("[data-admin-focus-filter]")?.addEventListener("click", () => {
+    app.querySelector("#admin-filters input[name='query']")?.focus();
+  });
+
+  app.querySelector("[data-admin-export]")?.addEventListener("click", () => {
+    exportAdminIncidents(filteredAdminIncidents());
   });
 
   app.querySelectorAll("[data-open-report]").forEach((el) => {
@@ -1585,17 +1663,7 @@ function bindAdmin() {
   });
 
   app.querySelectorAll("[data-select-incident]").forEach((el) => {
-    el.addEventListener("click", async () => {
-      state.selectedIncidentId = el.dataset.selectIncident || "";
-      state.selectedAdminReportId = "";
-      render();
-      try {
-        await loadAdminIncidentDetails(state.selectedIncidentId);
-      } catch (error) {
-        alert("Unable to load report details right now.");
-      }
-      render();
-    });
+    el.addEventListener("click", () => selectAdminIncident(el.dataset.selectIncident || "", { scrollToDetail: true }));
   });
 
   app.querySelector("#admin-update")?.addEventListener("submit", async (event) => {
@@ -1646,6 +1714,53 @@ function bindAdmin() {
   });
 }
 
+async function selectAdminIncident(incidentId, { scrollToDetail = false } = {}) {
+  if (!incidentId) return;
+  state.selectedIncidentId = incidentId;
+  state.selectedAdminReportId = "";
+  render();
+  try {
+    await loadAdminIncidentDetails(incidentId);
+  } catch (error) {
+    console.warn(error);
+  }
+  render();
+  if (scrollToDetail) {
+    window.setTimeout(() => app.querySelector("[data-admin-section='incident-detail']")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+}
+
+function exportAdminIncidents(incidents) {
+  const rows = [
+    ["Tracking No.", "Summary", "Location", "Category", "Priority", "Status", "Reports", "Reported", "Assigned To"],
+    ...incidents.map((incident) => [
+      incident.id,
+      incident.summary,
+      incident.location,
+      titleCase(incident.category),
+      incident.priority,
+      titleCase(incident.status),
+      String(incident.reportIds.length),
+      formatDate(incident.createdAt),
+      incident.assignedTo || "",
+    ]),
+  ];
+  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `mtaafix-incidents-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
 function incidentCard(incident, admin) {
   return `
     <button class="incident-card" ${admin ? `data-select-incident="${incident.id}"` : ""}>
@@ -1657,21 +1772,20 @@ function incidentCard(incident, admin) {
 }
 
 function adminIncidentQueue(incidents) {
-  if (!incidents.length) return `<p class="empty">No incidents match these filters.</p>`;
   return `
-    <div class="admin-table-card">
+    <div class="admin-table-card" data-admin-section="incidents">
       <div class="admin-panel-head">
         <h2>Recent Incidents</h2>
         <div class="admin-table-actions">
-          <button class="light-button" type="button">≡ Filters</button>
-          <button class="light-button" type="button">⇩ Export</button>
+          <button class="light-button" type="button" data-admin-focus-filter>≡ Filters</button>
+          <button class="light-button" type="button" data-admin-export>⇩ Export</button>
         </div>
       </div>
       <div class="admin-table-tabs">
-        <button class="active" type="button">All (${state.store.incidents.length})</button>
-        <button type="button">Open (${state.store.incidents.filter((incident) => incident.status === "REPORTED").length})</button>
-        <button type="button">In Progress (${state.store.incidents.filter((incident) => ["ASSIGNED", "IN_PROGRESS"].includes(incident.status)).length})</button>
-        <button type="button">Resolved (${state.store.incidents.filter((incident) => incident.status === "RESOLVED").length})</button>
+        ${adminTableTab("ALL", `All (${state.store.incidents.length})`)}
+        ${adminTableTab("OPEN", `Open (${state.store.incidents.filter((incident) => incident.status === "REPORTED").length})`)}
+        ${adminTableTab("ACTIVE", `In Progress (${state.store.incidents.filter((incident) => ["ASSIGNED", "IN_PROGRESS"].includes(incident.status)).length})`)}
+        ${adminTableTab("RESOLVED", `Resolved (${state.store.incidents.filter((incident) => incident.status === "RESOLVED").length})`)}
       </div>
       ${adminFiltersView()}
       <div class="admin-table-wrap" role="region" aria-label="Incident queue">
@@ -1691,7 +1805,7 @@ function adminIncidentQueue(incidents) {
           </tr>
         </thead>
         <tbody>
-          ${incidents.map(adminIncidentRow).join("")}
+          ${incidents.length ? incidents.map(adminIncidentRow).join("") : `<tr><td colspan="10"><p class="empty">No incidents match these filters.</p></td></tr>`}
         </tbody>
       </table>
       </div>
@@ -1699,13 +1813,18 @@ function adminIncidentQueue(incidents) {
   `;
 }
 
+function adminTableTab(status, label) {
+  return `<button class="${state.adminFilters.status === status ? "active" : ""}" type="button" data-admin-status-filter="${status}">${escapeHtml(label)}</button>`;
+}
+
 function adminIncidentRow(incident) {
   const isSelected = incident.id === state.selectedIncidentId;
+  const photoUrl = adminIncidentPhotoUrl(incident.id);
   return `
     <tr class="${isSelected ? "selected" : ""}">
       <td><input type="checkbox" aria-label="Select ${escapeHtml(incident.id)}" /></td>
       <td><button type="button" class="tracking-link" data-select-incident="${escapeHtml(incident.id)}">${escapeHtml(incident.id)}</button></td>
-      <td><div class="incident-thumb ${incident.category.toLowerCase()}"></div></td>
+      <td>${photoUrl ? `<img class="incident-thumb" src="${escapeHtml(photoUrl)}" alt="Attached photo for ${escapeHtml(incident.id)}" />` : `<div class="incident-thumb ${incident.category.toLowerCase()}"></div>`}</td>
       <td>
         <button type="button" class="table-incident-button" data-select-incident="${escapeHtml(incident.id)}">
           <span>${escapeHtml(incident.summary)}</span>
@@ -1720,6 +1839,11 @@ function adminIncidentRow(incident) {
       <td><button type="button" class="row-menu" data-select-incident="${escapeHtml(incident.id)}">•••</button></td>
     </tr>
   `;
+}
+
+function adminIncidentPhotoUrl(incidentId) {
+  const reports = state.adminReportsByIncident[incidentId] || [];
+  return reports.find((report) => report.photoUrl)?.photoUrl || "";
 }
 
 function adminAgeBadge(incident) {

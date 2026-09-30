@@ -2082,6 +2082,28 @@ h2 {
   padding: 30px;
 }
 
+.admin-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: #64748b;
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.admin-breadcrumbs button {
+  border: 0;
+  background: transparent;
+  color: #006fe8;
+  padding: 0;
+  font: inherit;
+}
+
+.admin-breadcrumbs strong {
+  color: #0b1728;
+}
+
 .admin-title-row {
   display: flex;
   align-items: start;
@@ -2470,6 +2492,12 @@ h2 {
   gap: 28px;
   border-bottom: 1px solid #e8eef4;
   padding: 0 22px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.admin-table-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-table-tabs button {
@@ -2479,6 +2507,7 @@ h2 {
   background: transparent;
   color: #52667a;
   font-weight: 850;
+  white-space: nowrap;
 }
 
 .admin-table-tabs button.active {
@@ -2497,7 +2526,17 @@ h2 {
 }
 
 .admin-table-card .admin-filters {
-  display: none;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(140px, 0.75fr));
+  gap: 12px;
+  margin: 0;
+  border-top: 1px solid #e8eef4;
+  border-bottom: 1px solid #e8eef4;
+  background: #fbfdff;
+  padding: 14px 22px;
+}
+
+.admin-table-card .admin-filters .admin-search {
+  grid-column: auto;
 }
 
 .admin-table-wrap {
@@ -2505,9 +2544,12 @@ h2 {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+  overflow-x: auto;
 }
 
 .admin-table {
+  min-width: 980px;
+  table-layout: fixed;
   font-size: 0.78rem;
 }
 
@@ -2519,11 +2561,57 @@ h2 {
   color: #52667a;
   font-size: 0.72rem;
   font-weight: 950;
+  white-space: nowrap;
 }
 
 .admin-table td {
   color: #0b1728;
   vertical-align: middle;
+  overflow: hidden;
+}
+
+.admin-table th:nth-child(1),
+.admin-table td:nth-child(1) {
+  width: 40px;
+}
+
+.admin-table th:nth-child(2),
+.admin-table td:nth-child(2) {
+  width: 132px;
+}
+
+.admin-table th:nth-child(3),
+.admin-table td:nth-child(3) {
+  width: 74px;
+}
+
+.admin-table th:nth-child(4),
+.admin-table td:nth-child(4) {
+  width: 250px;
+}
+
+.admin-table th:nth-child(5),
+.admin-table td:nth-child(5),
+.admin-table th:nth-child(6),
+.admin-table td:nth-child(6),
+.admin-table th:nth-child(7),
+.admin-table td:nth-child(7) {
+  width: 120px;
+}
+
+.admin-table th:nth-child(8),
+.admin-table td:nth-child(8) {
+  width: 72px;
+}
+
+.admin-table th:nth-child(9),
+.admin-table td:nth-child(9) {
+  width: 112px;
+}
+
+.admin-table th:nth-child(10),
+.admin-table td:nth-child(10) {
+  width: 72px;
 }
 
 .admin-table input[type="checkbox"] {
@@ -2540,6 +2628,12 @@ h2 {
   font-weight: 950;
 }
 
+.tracking-link {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
 .incident-thumb {
   width: 54px;
   height: 42px;
@@ -2548,6 +2642,7 @@ h2 {
     radial-gradient(ellipse at 50% 62%, rgba(44, 36, 27, 0.82) 0 18%, transparent 19%),
     linear-gradient(155deg, #2f3c3d 0 36%, #c8c7bd 37% 48%, #656f68 49% 56%, #1f2c2f 57% 100%);
   background-size: cover;
+  object-fit: cover;
 }
 
 .incident-thumb.streetlight {
@@ -2630,7 +2725,13 @@ h2 {
 }
 
 .admin-detail-drawer {
-  display: none;
+  display: block;
+  min-width: 0;
+  scroll-margin-top: 18px;
+}
+
+.admin-detail-drawer .incident-detail {
+  background: #ffffff;
 }
 
 .admin-form {
@@ -2761,6 +2862,11 @@ h2 {
   .admin-toolbar,
   .admin-main {
     padding-inline: 18px;
+  }
+
+  .admin-table-card .admin-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-inline: 16px;
   }
 
   nav {
@@ -2978,7 +3084,8 @@ h2 {
   }
 
   .admin-profile,
-  .admin-filters {
+  .admin-filters,
+  .admin-table-card .admin-filters {
     grid-template-columns: 1fr;
   }
 
@@ -3008,7 +3115,7 @@ h2 {
   }
 
   .admin-table {
-    min-width: 620px;
+    min-width: 900px;
   }
 
   .modal-backdrop {

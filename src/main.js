@@ -387,8 +387,9 @@ function setSelectedPhoto(file) {
 }
 
 function render() {
+  const adminConsole = state.view === "admin" && state.adminAuthed;
   app.innerHTML = `
-    <header class="topbar">
+    ${adminConsole ? "" : `<header class="topbar">
       <a class="brand nav-brand" href="#" data-view="home" aria-label="MtaaFix home">
         <img class="brand-logo" src="/public/mtaafix-logo-web.png" alt="MtaaFix" />
       </a>
@@ -400,7 +401,7 @@ function render() {
         ${navButton("about", "About")}
       </nav>
       <button class="nav-cta" data-view="report">Report an Issue</button>
-    </header>
+    </header>`}
     <main>
       ${state.view === "home" ? homeView() : ""}
       ${state.view === "report" ? reportView() : ""}
@@ -410,7 +411,7 @@ function render() {
       ${state.view === "about" ? aboutView() : ""}
       ${state.view === "success" ? successView() : ""}
     </main>
-    ${footerView()}
+    ${adminConsole ? "" : footerView()}
   `;
 
   bindNavigation();
@@ -1247,100 +1248,218 @@ function adminView() {
   const activeReport = selectedAdminReport();
   const adminUser = adminUserProfile();
   return `
-    <section class="admin-page">
-      <div class="panel admin-dashboard">
-        <div class="admin-dashboard-head">
+    <section class="admin-console">
+      <aside class="admin-nav">
+        <a class="admin-nav-brand" href="#" data-view="home" aria-label="MtaaFix home">
+          <img src="/public/mtaafix-logo-web.png" alt="MtaaFix" />
+        </a>
+        <div class="admin-nav-links" aria-label="Admin navigation">
+          ${adminNavItem("Dashboard", "dashboard", true)}
+          ${adminNavItem("Incidents", "incidents")}
+          ${adminNavItem("Reports", "reports")}
+          ${adminNavItem("Map", "map")}
+          ${adminNavItem("Analytics", "analytics")}
+          ${adminNavItem("Users", "users")}
+          ${adminNavItem("Teams", "teams")}
+          ${adminNavItem("Settings", "settings")}
+        </div>
+        <div class="admin-user-card">
+          <div class="profile-avatar">${escapeHtml(adminUser.initials)}</div>
           <div>
-            <span class="eyebrow">Authority operations</span>
-            <h1>Admin Dashboard</h1>
-            <p>Monitor reported cases, map public submissions, and prioritize the oldest unresolved issues.</p>
+            <strong>${escapeHtml(adminUser.name)}</strong>
+            <small>System Administrator</small>
           </div>
-          <div class="admin-profile">
+          <button class="admin-user-chevron" type="button" id="admin-logout" aria-label="Logout">›</button>
+        </div>
+      </aside>
+      <div class="admin-workspace">
+        <div class="admin-toolbar">
+          <label class="admin-global-search">
+            <span>⌕</span>
+            <input value="${escapeHtml(state.adminFilters.query)}" data-admin-global-search placeholder="Search incidents, tracking number, location or keyword..." />
+            <kbd>⌘ K</kbd>
+          </label>
+          <div class="admin-toolbar-actions">
+            <button class="admin-select" type="button">⌖ Nairobi County⌄</button>
+            <button class="admin-select" type="button">□ Last 30 days⌄</button>
+            <button class="admin-icon-button" type="button" aria-label="Notifications">♢<span>5</span></button>
             <div class="profile-avatar">${escapeHtml(adminUser.initials)}</div>
-            <div>
-              <strong>${escapeHtml(adminUser.name)}</strong>
-              <small>${escapeHtml(adminUser.email)}</small>
-            </div>
-            <button class="light-button admin-logout" id="admin-logout" type="button">Logout</button>
           </div>
         </div>
-        ${adminDashboardSummary()}
-        <div class="admin-insights-grid">
-          ${adminBreakdownPanel("Cases by status", adminStatusBreakdown())}
-          ${adminBreakdownPanel("Cases by category", adminCategoryBreakdown())}
-          <div class="admin-map-card">
-            <div class="section-title"><span>Public report map</span><strong>Mapped cases</strong></div>
-            <div id="admin-map" class="admin-map" aria-label="Admin map of public reports"></div>
+        <div class="admin-main">
+          <div class="admin-title-row">
+            <div>
+              <h1>Dashboard</h1>
+              <p>Overview of community issues and their resolution progress</p>
+            </div>
+            <button class="admin-add-button" type="button" data-view="report"><span>+</span> Add Incident <b>⌄</b></button>
           </div>
+          ${adminDashboardSummary()}
+          <div class="admin-grid-row">
+            ${adminCategoryDonut()}
+            ${adminTrendPanel()}
+            ${adminActivityPanel()}
+          </div>
+          <div class="admin-lower-grid">
+            ${adminIncidentQueue(incidents)}
+            <div class="admin-map-card">
+              <div class="admin-panel-head">
+                <h2>Incident Map</h2>
+                <button class="light-button" type="button" data-view="map">View Full Map</button>
+              </div>
+              <div id="admin-map" class="admin-map" aria-label="Admin map of public reports"></div>
+              <div class="admin-map-legend">
+                <span><b class="legend-dot high"></b>High Priority</span>
+                <span><b class="legend-dot medium"></b>Medium</span>
+                <span><b class="legend-dot low"></b>Low</span>
+                <span><b class="legend-dot resolved"></b>Resolved</span>
+              </div>
+            </div>
+          </div>
+          <div class="admin-detail-drawer">${selected ? incidentDetail(selected, true) : `<p class="empty">Select an incident.</p>`}</div>
         </div>
       </div>
-      <section class="admin-shell">
-        <aside class="panel admin-sidebar">
-          <div class="section-title admin-queue-title"><span>Queue</span><strong>${incidents.length} incidents</strong></div>
-          ${adminFiltersView()}
-          ${adminIncidentQueue(incidents)}
-        </aside>
-        <section class="admin-detail">${selected ? incidentDetail(selected, true) : `<p class="empty">Select an incident.</p>`}</section>
-      </section>
     </section>
     ${activeReport ? reportModal(activeReport) : ""}
   `;
+}
+
+function adminNavItem(label, icon, active = false) {
+  const icons = {
+    dashboard: "▣",
+    incidents: "⌂",
+    reports: "▧",
+    map: "⌖",
+    analytics: "▥",
+    users: "♙",
+    teams: "☷",
+    settings: "⚙",
+  };
+  return `<button class="${active ? "active" : ""}" type="button"><span>${icons[icon] || "•"}</span>${escapeHtml(label)}</button>`;
 }
 
 function adminDashboardSummary() {
   const incidents = state.store.incidents;
   const open = incidents.filter((incident) => incident.status !== "RESOLVED").length;
   const high = incidents.filter((incident) => incident.priority === "HIGH").length;
-  const aging = incidents.filter((incident) => unresolvedAgeDays(incident) >= 7).length;
-  const reports = incidents.reduce((sum, incident) => sum + incident.reportIds.length, 0);
+  const inProgress = incidents.filter((incident) => ["ASSIGNED", "IN_PROGRESS"].includes(incident.status)).length;
+  const resolved = incidents.filter((incident) => incident.status === "RESOLVED").length;
   return `
     <div class="admin-kpis">
-      ${adminKpi("Total cases", String(incidents.length), "All public incidents")}
-      ${adminKpi("Open cases", String(open), "Awaiting completion")}
-      ${adminKpi("High priority", String(high), "Needs urgent attention")}
-      ${adminKpi("Aging cases", String(aging), "Open for 7+ days")}
-      ${adminKpi("Public reports", String(reports), "Submissions received")}
+      ${adminKpi("Open Incidents", String(open), "vs previous 30 days", "-12%", "shield")}
+      ${adminKpi("High Priority", String(high), "vs previous 30 days", "+6%", "alert")}
+      ${adminKpi("In Progress", String(inProgress), "vs previous 30 days", "-8%", "tools")}
+      ${adminKpi("Resolved", String(resolved), "vs previous 30 days", "+24%", "resolved")}
     </div>
   `;
 }
 
-function adminKpi(label, value, hint) {
+function adminKpi(label, value, hint, delta, type) {
+  const positive = delta.startsWith("+");
   return `
-    <div class="admin-kpi">
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value)}</strong>
-      <small>${escapeHtml(hint)}</small>
+    <div class="admin-kpi ${escapeHtml(type)}">
+      <div class="admin-kpi-icon">${adminKpiIcon(type)}</div>
+      <div>
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <small>${escapeHtml(hint)}</small>
+      </div>
+      <div class="admin-kpi-delta ${positive ? "up" : "down"}">${positive ? "↑" : "↓"} ${escapeHtml(delta)}</div>
+      <svg viewBox="0 0 120 42" aria-hidden="true"><path d="M2 28 C14 12 24 34 36 18 S58 30 68 20 S86 10 96 24 S110 18 118 12" /></svg>
     </div>
   `;
 }
 
-function adminStatusBreakdown() {
-  return statusOrder.map((status) => ({
-    label: titleCase(status),
-    value: state.store.incidents.filter((incident) => incident.status === status).length,
-    className: status.toLowerCase(),
-  }));
+function adminKpiIcon(type) {
+  return {
+    shield: "⬟",
+    alert: "△",
+    tools: "✣",
+    resolved: "▧",
+  }[type] || "•";
 }
 
-function adminCategoryBreakdown() {
-  return reportCategories.map(([value, label]) => ({
+function adminCategoryData() {
+  const colors = ["#2f80ed", "#ff7a1a", "#12b76a", "#f5bd22", "#8b5cf6", "#8ecbff", "#94a3b8"];
+  return reportCategories.map(([value, label], index) => ({
     label,
     value: state.store.incidents.filter((incident) => incident.category === value).length,
     className: value.toLowerCase(),
+    color: colors[index % colors.length],
   })).filter((item) => item.value > 0);
 }
 
-function adminBreakdownPanel(title, items) {
-  const max = Math.max(...items.map((item) => item.value), 1);
+function adminCategoryDonut() {
+  const items = adminCategoryData();
+  const total = items.reduce((sum, item) => sum + item.value, 0) || 1;
+  let cursor = 0;
+  const gradient = items.map((item) => {
+    const start = cursor;
+    cursor += (item.value / total) * 100;
+    return `${item.color} ${start}% ${cursor}%`;
+  }).join(", ");
   return `
-    <div class="admin-breakdown">
-      <div class="section-title"><span>Distribution</span><strong>${escapeHtml(title)}</strong></div>
-      <div class="breakdown-list">
+    <div class="admin-chart-card admin-category-card">
+      <div class="admin-panel-head"><h2>Incidents by Category</h2></div>
+      <div class="category-donut-layout">
+        <div class="category-donut" style="background: conic-gradient(${gradient});">
+          <div><strong>${total}</strong><span>Total</span></div>
+        </div>
+        <div class="category-legend">
         ${items.map((item) => `
-          <div class="breakdown-row">
-            <span>${escapeHtml(item.label)}</span>
-            <div class="breakdown-bar"><b class="${escapeHtml(item.className)}" style="width: ${Math.max(8, Math.round((item.value / max) * 100))}%"></b></div>
-            <strong>${item.value}</strong>
+          <span><b style="background:${item.color}"></b>${escapeHtml(item.label)} <strong>${Math.round((item.value / total) * 100)}%</strong></span>
+        `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function adminTrendPanel() {
+  return `
+    <div class="admin-chart-card admin-trend-card">
+      <div class="admin-panel-head">
+        <h2>Incident Status Trend</h2>
+        <button class="admin-select compact" type="button">Last 30 days⌄</button>
+      </div>
+      <div class="trend-legend">
+        <span><b class="reported"></b>Reported</span>
+        <span><b class="progress"></b>In Progress</span>
+        <span><b class="resolved"></b>Resolved</span>
+      </div>
+      <svg class="trend-chart" viewBox="0 0 640 230" role="img" aria-label="Incident status trend chart">
+        <g class="trend-grid">
+          <path d="M50 20 H620 M50 70 H620 M50 120 H620 M50 170 H620 M50 220 H620" />
+          <path d="M50 20 V220 M160 20 V220 M270 20 V220 M380 20 V220 M490 20 V220 M620 20 V220" />
+        </g>
+        <g class="trend-axis">
+          <text x="20" y="224">0</text><text x="20" y="174">20</text><text x="20" y="124">40</text><text x="20" y="74">60</text><text x="20" y="24">80</text>
+          <text x="50" y="246">Sep 1</text><text x="160" y="246">Sep 7</text><text x="270" y="246">Sep 14</text><text x="490" y="246">Sep 21</text><text x="600" y="246">Sep 30</text>
+        </g>
+        <path class="trend-fill resolved" d="M50 205 C90 185 105 190 130 175 S190 165 230 170 S285 155 320 168 S390 185 435 172 S520 165 620 132 L620 220 L50 220 Z" />
+        <path class="trend-line reported" d="M50 150 C82 118 100 116 130 100 S180 118 215 103 S270 128 320 105 S380 118 420 88 S500 120 545 78 S590 80 620 58" />
+        <path class="trend-line progress" d="M50 178 C88 155 118 145 155 148 S230 150 270 140 S335 155 382 125 S458 165 520 118 S575 130 620 120" />
+        <path class="trend-line resolved" d="M50 205 C90 185 105 190 130 175 S190 165 230 170 S285 155 320 168 S390 185 435 172 S520 165 620 132" />
+      </svg>
+    </div>
+  `;
+}
+
+function adminActivityPanel() {
+  const items = state.store.incidents.slice(0, 4);
+  const activityLabels = ["Incident resolved", "Work in progress", "Assigned to Roads Team", "Incident verified"];
+  return `
+    <div class="admin-activity-card">
+      <div class="admin-panel-head"><h2>Recent Activity</h2><button type="button">View all</button></div>
+      <div class="activity-list">
+        ${items.map((incident, index) => `
+          <div class="activity-item">
+            <span class="activity-dot type-${index}">${["✓", "✣", "●", "↗"][index] || "•"}</span>
+            <div>
+              <strong>${escapeHtml(activityLabels[index] || "Incident updated")}</strong>
+              <small>${escapeHtml(incident.id)}</small>
+              <span>${index ? `${index + 1} hours ago` : "2 hours ago"}</span>
+            </div>
           </div>
         `).join("")}
       </div>
@@ -1382,6 +1501,19 @@ function bindAdmin() {
     state.adminReportsByIncident = {};
     state.selectedAdminReportId = "";
     render();
+  });
+
+  app.querySelector("[data-admin-global-search]")?.addEventListener("input", (event) => {
+    state.adminFilters.query = event.currentTarget.value;
+    window.clearTimeout(adminFilterRenderTimer);
+    adminFilterRenderTimer = window.setTimeout(() => {
+      const incidents = filteredAdminIncidents();
+      if (!incidents.some((incident) => incident.id === state.selectedIncidentId)) {
+        state.selectedIncidentId = incidents[0]?.id || "";
+      }
+      state.selectedAdminReportId = "";
+      render();
+    }, 220);
   });
 
   app.querySelector("#admin-filters")?.addEventListener("change", (event) => {
@@ -1527,20 +1659,42 @@ function incidentCard(incident, admin) {
 function adminIncidentQueue(incidents) {
   if (!incidents.length) return `<p class="empty">No incidents match these filters.</p>`;
   return `
-    <div class="admin-table-wrap" role="region" aria-label="Incident queue">
+    <div class="admin-table-card">
+      <div class="admin-panel-head">
+        <h2>Recent Incidents</h2>
+        <div class="admin-table-actions">
+          <button class="light-button" type="button">≡ Filters</button>
+          <button class="light-button" type="button">⇩ Export</button>
+        </div>
+      </div>
+      <div class="admin-table-tabs">
+        <button class="active" type="button">All (${state.store.incidents.length})</button>
+        <button type="button">Open (${state.store.incidents.filter((incident) => incident.status === "REPORTED").length})</button>
+        <button type="button">In Progress (${state.store.incidents.filter((incident) => ["ASSIGNED", "IN_PROGRESS"].includes(incident.status)).length})</button>
+        <button type="button">Resolved (${state.store.incidents.filter((incident) => incident.status === "RESOLVED").length})</button>
+      </div>
+      ${adminFiltersView()}
+      <div class="admin-table-wrap" role="region" aria-label="Incident queue">
       <table class="admin-table">
         <thead>
           <tr>
-            <th>Incident</th>
-            <th>Status</th>
+            <th><input type="checkbox" aria-label="Select all incidents" /></th>
+            <th>Tracking No.</th>
+            <th>Photo</th>
+            <th>Title / Location</th>
+            <th>Category</th>
             <th>Priority</th>
-            <th>Age</th>
+            <th>Status</th>
+            <th>Reports</th>
+            <th>Reported</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           ${incidents.map(adminIncidentRow).join("")}
         </tbody>
       </table>
+      </div>
     </div>
   `;
 }
@@ -1549,16 +1703,21 @@ function adminIncidentRow(incident) {
   const isSelected = incident.id === state.selectedIncidentId;
   return `
     <tr class="${isSelected ? "selected" : ""}">
+      <td><input type="checkbox" aria-label="Select ${escapeHtml(incident.id)}" /></td>
+      <td><button type="button" class="tracking-link" data-select-incident="${escapeHtml(incident.id)}">${escapeHtml(incident.id)}</button></td>
+      <td><div class="incident-thumb ${incident.category.toLowerCase()}"></div></td>
       <td>
         <button type="button" class="table-incident-button" data-select-incident="${escapeHtml(incident.id)}">
-          <strong>${escapeHtml(incident.id)}</strong>
           <span>${escapeHtml(incident.summary)}</span>
-          <small>${escapeHtml(incident.location)}</small>
+          <small>⌖ ${escapeHtml(incident.location)}</small>
         </button>
       </td>
-      <td><span class="badge ${incident.status.toLowerCase()}">${titleCase(incident.status)}</span></td>
+      <td><span class="badge category ${incident.category.toLowerCase()}">${escapeHtml(titleCase(incident.category))}</span></td>
       <td><span class="badge ${incident.priority.toLowerCase()}">${incident.priority}</span></td>
-      <td>${adminAgeBadge(incident)}</td>
+      <td><span class="badge ${incident.status.toLowerCase()}">${titleCase(incident.status)}</span></td>
+      <td>${incident.reportIds.length}</td>
+      <td><span class="reported-date">${formatDate(incident.createdAt)}</span></td>
+      <td><button type="button" class="row-menu" data-select-incident="${escapeHtml(incident.id)}">•••</button></td>
     </tr>
   `;
 }

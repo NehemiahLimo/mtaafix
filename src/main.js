@@ -43,6 +43,11 @@ let state = {
     priority: "ALL",
     category: "ALL",
   },
+  mapFilters: {
+    category: "ALL",
+    statuses: ["OPEN", "IN_PROGRESS", "RESOLVED"],
+    priorities: ["HIGH", "MEDIUM", "LOW"],
+  },
   selectedAdminReportId: "",
   adminToken: sessionStorage.getItem("mtaafix.admin.token") || "",
 };
@@ -419,8 +424,10 @@ function render() {
   `;
 
   bindNavigation();
+  bindPublicIncidentLinks();
   if (state.view === "report") bindReport();
   if (state.view === "track") bindTrack();
+  if (state.view === "map") bindMapFilters();
   if (state.view === "admin") bindAdmin();
   if (state.view === "admin" && state.adminAuthed) initAdminMap();
   if (state.view === "home") bindHome();
@@ -1067,25 +1074,33 @@ function bindTrack() {
 }
 
 function mapView() {
-  const incidents = state.store.incidents;
+  const incidents = filteredMapIncidents();
+  const total = state.store.incidents.length;
   return `
     <section class="workspace map-layout">
       <aside class="panel map-filter">
-        <strong>Filter Issues</strong>
-        <label><input type="radio" checked /> All Issues</label>
-        <label><input type="radio" /> Road Damage</label>
-        <label><input type="radio" /> Streetlight</label>
-        <label><input type="radio" /> Water Leak</label>
-        <label><input type="radio" /> Drainage</label>
-        <label><input type="radio" /> Waste</label>
-        <strong>Status</strong>
-        <label><input type="checkbox" checked /> Open</label>
-        <label><input type="checkbox" checked /> In Progress</label>
-        <label><input type="checkbox" checked /> Resolved</label>
-        <strong>Priority</strong>
-        <label><input type="checkbox" checked /> High</label>
-        <label><input type="checkbox" checked /> Medium</label>
-        <label><input type="checkbox" /> Low</label>
+        <div class="map-filter-head">
+          <div>
+            <span>Filter Issues</span>
+            <strong>${incidents.length} of ${total}</strong>
+          </div>
+          <button type="button" data-map-reset>Reset</button>
+        </div>
+        <fieldset>
+          <legend>Category</legend>
+          ${mapCategoryOption("ALL", "All Issues", total)}
+          ${reportCategories.map(([value, label]) => mapCategoryOption(value, label, state.store.incidents.filter((incident) => incident.category === value).length)).join("")}
+        </fieldset>
+        <fieldset>
+          <legend>Status</legend>
+          ${mapCheckboxOption("status", "OPEN", "Open", mapStatusMatches("OPEN").length)}
+          ${mapCheckboxOption("status", "IN_PROGRESS", "In Progress", mapStatusMatches("IN_PROGRESS").length)}
+          ${mapCheckboxOption("status", "RESOLVED", "Resolved", mapStatusMatches("RESOLVED").length)}
+        </fieldset>
+        <fieldset>
+          <legend>Priority</legend>
+          ${["HIGH", "MEDIUM", "LOW"].map((priority) => mapCheckboxOption("priority", priority, titleCase(priority), state.store.incidents.filter((incident) => incident.priority === priority).length)).join("")}
+        </fieldset>
       </aside>
       <div class="map-surface panel">
         <div id="community-map" class="leaflet-map" aria-label="Public community map"></div>
@@ -1095,12 +1110,84 @@ function mapView() {
           <span><b class="legend-dot low"></b>Low / Resolved</span>
         </div>
       </div>
-      <div class="panel">
-        <div class="section-title"><span>Public incidents</span><strong>Community view</strong></div>
-        <div class="incident-list">${incidents.map((incident) => incidentCard(incident, false)).join("")}</div>
+      <div class="panel map-list-panel">
+        <div class="section-title"><span>Public incidents</span><strong>Community view</strong><p>${incidents.length ? "Filtered reports sorted by newest first." : "No incidents match these filters."}</p></div>
+        <div class="incident-list">${incidents.length ? incidents.map((incident) => incidentCard(incident, false)).join("") : `<p class="empty">Try resetting filters or selecting another category.</p>`}</div>
       </div>
     </section>
   `;
+}
+
+function mapCategoryOption(value, label, count) {
+  return `
+    <label>
+      <input type="radio" name="map-category" value="${escapeHtml(value)}" ${state.mapFilters.category === value ? "checked" : ""} />
+      <span>${escapeHtml(label)}</span>
+      <b>${count}</b>
+    </label>
+  `;
+}
+
+function mapCheckboxOption(type, value, label, count) {
+  const selected = type === "status" ? state.mapFilters.statuses.includes(value) : state.mapFilters.priorities.includes(value);
+  return `
+    <label>
+      <input type="checkbox" name="map-${escapeHtml(type)}" value="${escapeHtml(value)}" ${selected ? "checked" : ""} />
+      <span>${escapeHtml(label)}</span>
+      <b>${count}</b>
+    </label>
+  `;
+}
+
+function mapStatusMatches(statusGroup) {
+  return state.store.incidents.filter((incident) => mapStatusGroup(incident.status) === statusGroup);
+}
+
+function mapStatusGroup(status) {
+  if (status === "RESOLVED") return "RESOLVED";
+  if (["ASSIGNED", "IN_PROGRESS"].includes(status)) return "IN_PROGRESS";
+  return "OPEN";
+}
+
+function filteredMapIncidents() {
+  return state.store.incidents
+    .filter((incident) => {
+      if (state.mapFilters.category !== "ALL" && incident.category !== state.mapFilters.category) return false;
+      if (!state.mapFilters.statuses.includes(mapStatusGroup(incident.status))) return false;
+      if (!state.mapFilters.priorities.includes(incident.priority)) return false;
+      return true;
+    })
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+}
+
+function bindMapFilters() {
+  app.querySelector(".map-filter")?.addEventListener("change", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    if (input.name === "map-category") {
+      state.mapFilters.category = input.value;
+    }
+    if (input.name === "map-status") {
+      state.mapFilters.statuses = selectedMapCheckboxValues("map-status");
+    }
+    if (input.name === "map-priority") {
+      state.mapFilters.priorities = selectedMapCheckboxValues("map-priority");
+    }
+    render();
+  });
+
+  app.querySelector("[data-map-reset]")?.addEventListener("click", () => {
+    state.mapFilters = {
+      category: "ALL",
+      statuses: ["OPEN", "IN_PROGRESS", "RESOLVED"],
+      priorities: ["HIGH", "MEDIUM", "LOW"],
+    };
+    render();
+  });
+}
+
+function selectedMapCheckboxValues(name) {
+  return Array.from(app.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => input.value);
 }
 
 function initLeafletMap() {
@@ -1111,7 +1198,7 @@ function initLeafletMap() {
     return;
   }
 
-  const validIncidents = state.store.incidents.filter((incident) => Number.isFinite(incident.lat) && Number.isFinite(incident.lng));
+  const validIncidents = filteredMapIncidents().filter((incident) => Number.isFinite(incident.lat) && Number.isFinite(incident.lng));
   const incidents = validIncidents.filter(isNairobiCoordinate);
   const center = incidents.length ? [incidents[0].lat, incidents[0].lng] : [-1.2864, 36.8219];
   const map = window.L.map(mapEl, {
@@ -1137,6 +1224,8 @@ function initLeafletMap() {
   if (markers.length > 1) {
     const group = window.L.featureGroup(markers);
     map.fitBounds(group.getBounds().pad(0.18), { maxZoom: 14 });
+  } else if (!markers.length) {
+    mapEl.insertAdjacentHTML("beforeend", `<div class="map-empty-state">No mapped incidents match the selected filters.</div>`);
   }
 
   mapEl.addEventListener("click", (event) => {
@@ -1763,12 +1852,23 @@ function csvCell(value) {
 
 function incidentCard(incident, admin) {
   return `
-    <button class="incident-card" ${admin ? `data-select-incident="${incident.id}"` : ""}>
+    <button class="incident-card" ${admin ? `data-select-incident="${incident.id}"` : `data-track-incident="${incident.id}"`}>
       <span class="status-dot ${incident.status.toLowerCase()}"></span>
       <span><strong>${incident.id}</strong><small>${incident.summary}</small></span>
       <b>${incident.reportIds.length}</b>
     </button>
   `;
+}
+
+function bindPublicIncidentLinks() {
+  app.querySelectorAll("[data-track-incident]").forEach((el) => {
+    el.addEventListener("click", async () => {
+      state.selectedIncidentId = el.dataset.trackIncident || "";
+      state.view = "track";
+      await loadTrackingIncident(state.selectedIncidentId);
+      render();
+    });
+  });
 }
 
 function adminIncidentQueue(incidents) {

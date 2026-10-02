@@ -302,7 +302,7 @@ main:has(.admin-console) {
 }
 
 .map-layout {
-  grid-template-columns: 220px minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(230px, 0.34fr) minmax(460px, 1fr) minmax(320px, 0.42fr);
 }
 
 .about-grid {
@@ -1336,36 +1336,90 @@ h2 {
 
 .map-surface {
   position: relative;
-  min-height: 560px;
+  min-height: 620px;
   overflow: hidden;
   background: #dfe8e4;
 }
 
 .map-filter {
   display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 22px;
+}
+
+.map-filter-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
   gap: 12px;
-  padding: 18px;
 }
 
-.map-filter strong {
-  margin-top: 6px;
+.map-filter-head span,
+.map-filter legend {
+  display: block;
+  color: #66736e;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.map-filter strong:first-child {
-  margin-top: 0;
+.map-filter-head strong {
+  display: block;
+  margin-top: 3px;
+  color: #17231f;
+  font-size: 1.25rem;
+}
+
+.map-filter-head button {
+  border: 1px solid rgba(23, 35, 31, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #007a41;
+  padding: 8px 10px;
+  font-weight: 900;
+}
+
+.map-filter fieldset {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.map-filter legend {
+  margin-bottom: 3px;
 }
 
 .map-filter label {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 34px;
+  border-radius: 8px;
   color: #34413c;
   font-size: 0.9rem;
   font-weight: 750;
 }
 
+.map-filter label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-filter label b {
+  color: #66736e;
+  font-size: 0.78rem;
+}
+
 .map-filter input {
   width: auto;
+  accent-color: #00984f;
 }
 
 .leaflet-map {
@@ -1645,6 +1699,46 @@ h2 {
   color: #34413c;
   font-size: 0.78rem;
   font-weight: 850;
+}
+
+.map-list-panel {
+  max-height: 620px;
+  overflow: auto;
+}
+
+.map-list-panel .section-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: -1px -1px 12px;
+  border-bottom: 1px solid rgba(23, 35, 31, 0.08);
+  background: #fffdfa;
+  padding: 1px 1px 14px;
+}
+
+.map-list-panel .section-title p {
+  margin: 8px 0 0;
+  color: #66736e;
+  font-size: 0.92rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.map-empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 402;
+  width: min(280px, calc(100% - 36px));
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(23, 35, 31, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 14px 16px;
+  color: #34413c;
+  text-align: center;
+  font-weight: 850;
+  box-shadow: 0 16px 34px rgba(13, 55, 44, 0.14);
 }
 
 .legend-dot {
@@ -3058,8 +3152,14 @@ h2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .map-filter-head,
+  .map-filter fieldset:first-of-type,
   .map-filter strong {
     grid-column: 1 / -1;
+  }
+
+  .map-filter fieldset:first-of-type {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .map-surface {
@@ -3159,6 +3259,10 @@ h2 {
   .home-benefits,
   .category-grid,
   .map-filter {
+    grid-template-columns: 1fr;
+  }
+
+  .map-filter fieldset:first-of-type {
     grid-template-columns: 1fr;
   }
 

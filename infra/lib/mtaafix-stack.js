@@ -140,6 +140,7 @@ class MtaaFixStack extends cdk.Stack {
     addRoute(api, "PATCH", "/v1/admin/incidents/{incidentId}", apiRouter, adminAuthorizer);
     addRoute(api, "GET", "/v1/admin/incidents/{incidentId}/reports", apiRouter, adminAuthorizer);
     addRoute(api, "GET", "/v1/admin/photos", apiRouter, adminAuthorizer);
+    applyPocApiThrottleOverrides(api);
 
     const websiteOriginAccessIdentity = new cloudfront.OriginAccessIdentity(this, "WebsiteOriginAccessIdentity");
     websiteBucket.grantRead(websiteOriginAccessIdentity);
@@ -189,6 +190,27 @@ class MtaaFixStack extends cdk.Stack {
       environment,
     });
   }
+}
+
+function applyPocApiThrottleOverrides(api) {
+  const defaultStage = api.defaultStage.node.defaultChild;
+  defaultStage.defaultRouteSettings = {
+    throttlingRateLimit: 20,
+    throttlingBurstLimit: 40,
+  };
+  defaultStage.routeSettings = {
+    "POST /v1/reports/analyze": throttleSettings(3, 6),
+    "POST /v1/reports": throttleSettings(2, 5),
+    "POST /v1/uploads/presign": throttleSettings(2, 5),
+    "PATCH /v1/admin/incidents/{incidentId}": throttleSettings(2, 5),
+  };
+}
+
+function throttleSettings(rateLimit, burstLimit) {
+  return {
+    ThrottlingRateLimit: rateLimit,
+    ThrottlingBurstLimit: burstLimit,
+  };
 }
 
 function addRoute(api, method, pathValue, fn, authorizer) {
